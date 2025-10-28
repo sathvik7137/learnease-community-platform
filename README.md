@@ -10,18 +10,18 @@
 
 ---
 
-## 🌟 Overview
+## Overview
 
 **LearnEase** is a modern, cross-platform learning application built with Flutter that combines interactive educational content with community-driven contributions. Students can learn Java and DBMS concepts through quizzes, fill-in-the-blank exercises, and share their own content with the community.
 
 ### Features
 
-- ✅ **Interactive Learning** - Engaging quizzes and exercises
-- ✅ **Community-Driven** - Users contribute and share content
-- ✅ **Real-Time Sync** - Content updates across all users
-- ✅ **Achievement System** - Gamified learning experience
-- ✅ **Offline Support** - Works without internet connection
-- ✅ **Cross-Platform** - Web, Android, iOS, Desktop
+- **Interactive Learning** - Engaging quizzes and exercises
+- **Community-Driven** - Users contribute and share content
+- **Real-Time Sync** - Content updates across all users
+- **Achievement System** - Gamified learning experience
+- **Offline Support** - Works without internet connection
+- **Cross-Platform** - Web, Android, iOS, Desktop
 
 ---
 
@@ -253,6 +253,7 @@ For questions or support, please open an issue on GitHub.
   ⭐ Star this repo if you find it helpful!
   
 </div>
+
 
 
 
