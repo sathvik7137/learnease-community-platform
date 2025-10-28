@@ -184,7 +184,7 @@ Contributions are welcome! Please:
 
 ---
 
-## � Contributors
+## 🫴 Contributors
 
 This project was made possible by the contributions of:
 
@@ -240,7 +240,7 @@ This project was made possible by the contributions of:
 
 ---
 
-## �📧 Contact
+## 📧 Contact
 
 For questions or support, please open an issue on GitHub.
 
@@ -253,5 +253,6 @@ For questions or support, please open an issue on GitHub.
   ⭐ Star this repo if you find it helpful!
   
 </div>
+
 
 
