@@ -1,55 +1,66 @@
 # 🎓 LearnEase Community Learning Platform
 
 <div align="center">
-
-**An Interactive, Community-Driven Learning Platform built with Flutter + Dart**
-
-[![Flutter](https://img.shields.io/badge/Flutter-3.x-blue.svg)](https://flutter.dev)
-[![Dart](https://img.shields.io/badge/Dart-3.x-blue.svg)](https://dart.dev)
-
+  
+  **An Interactive Community-Driven Learning Platform**
+  
+  [![Flutter](https://img.shields.io/badge/Flutter-3.x-blue.svg)](https://flutter.dev)
+  [![Dart](https://img.shields.io/badge/Dart-3.x-blue.svg)](https://dart.dev)
 </div>
 
 ---
 
 ## 🌟 Overview
 
-**LearnEase** is a full-stack learning platform that helps students learn **Java** and **DBMS** interactively through quizzes, fill-in-the-blanks, and user-contributed content.
-Built using **Flutter** (frontend) and **Dart Shelf** (backend), it supports web and mobile platforms.
+**LearnEase** is a modern, cross-platform learning application built with Flutter that combines interactive educational content with community-driven contributions. Students can learn Java and DBMS concepts through quizzes, fill-in-the-blank exercises, and share their own content with the community.
 
-### ✨ Key Highlights
+### Features
 
-* 📚 Interactive courses (Java, DBMS)
-* 👥 Community-driven content sharing
-* 🧠 Quizzes & fill-in-the-blank exercises
-* 🏆 Achievement & progress tracking
-* 🌐 ngrok-powered public deployment
-* ⚡ Offline support & responsive UI
+- ✅ **Interactive Learning** - Engaging quizzes and exercises
+- ✅ **Community-Driven** - Users contribute and share content
+- ✅ **Real-Time Sync** - Content updates across all users
+- ✅ **Achievement System** - Gamified learning experience
+- ✅ **Offline Support** - Works without internet connection
+- ✅ **Cross-Platform** - Web, Android, iOS, Desktop
 
 ---
 
-## ⚙️ Setup Instructions
+## 📥 Installation
 
 ### Prerequisites
+- Flutter SDK 3.x or higher
+- Dart SDK 3.x or higher
+- Git
 
-* Flutter SDK 3.x
-* Dart SDK 3.x
-* Git installed
+### Setup Steps
 
-### Steps to Run Locally
-
+1. **Clone the Repository**
 ```bash
-# Clone repo
-git clone https://github.com/sathvik7137/learnease-community-platform.git
+git clone https://github.com/yourusername/learnease-community-platform.git
 cd learnease-community-platform
+```
 
-# Install dependencies
+2. **Install Flutter Dependencies**
+```bash
 flutter pub get
-cd community_server && dart pub get && cd ..
+```
 
-# Run backend
-dart run community_server/bin/server.dart
+3. **Install Server Dependencies**
+```bash
+cd community_server
+dart pub get
+cd ..
+```
 
-# Run frontend
+4. **Run the Application**
+
+**Local Development:**
+```bash
+# Terminal 1: Start the server
+cd community_server
+dart run bin/server.dart
+
+# Terminal 2: Run Flutter app
 flutter run -d chrome
 ```
 
@@ -57,126 +68,188 @@ flutter run -d chrome
 
 ## 🌐 Deployment with ngrok
 
-1. Download [ngrok](https://ngrok.com/download)
-2. Add your authtoken:
+### Quick Start
 
-   ```bash
-   ngrok config add-authtoken YOUR_TOKEN
-   ```
-3. Run your Dart server:
+1. **Download ngrok**:
+```powershell
+.\download_ngrok.ps1
+```
 
-   ```bash
-   dart run community_server/bin/server.dart
-   ```
-4. Start ngrok tunnel:
+2. **Configure authtoken** (get from https://dashboard.ngrok.com):
+```powershell
+.\ngrok.exe config add-authtoken YOUR_TOKEN
+```
 
-   ```bash
-   ngrok http 8080
-   ```
-5. Access API via generated URL like:
-   👉 `https://xyz123.ngrok-free.app`
+3. **Deploy**:
+```powershell
+.\deploy_ngrok.ps1
+```
 
----
-
-## 🧩 API Overview
-
-| Method | Endpoint                        | Description         |
-| ------ | ------------------------------- | ------------------- |
-| GET    | `/health`                       | Check server status |
-| GET    | `/api/contributions`            | Get all content     |
-| GET    | `/api/contributions/{category}` | Filter (java/dbms)  |
-| POST   | `/api/contributions`            | Add new content     |
-| PUT    | `/api/contributions/{id}`       | Update content      |
-| DELETE | `/api/contributions/{id}`       | Remove content      |
+4. **Access Your App**:
+   - Local: `http://localhost:PORT`
+   - Public API: `https://xxxxx.ngrok-free.app`
 
 ---
 
-## 🧱 Project Structure
+## 📡 API Endpoints
+
+### Base URL
+- **Local**: `http://localhost:8080`
+- **Public**: `https://your-ngrok-url.ngrok-free.app`
+
+### Available Endpoints
+
+```http
+GET  /                              # API documentation
+GET  /health                        # Health check
+GET  /api/contributions             # Get all contributions
+GET  /api/contributions/{category}  # Get by category (java/dbms)
+POST /api/contributions             # Add new contribution
+PUT  /api/contributions/{id}        # Update contribution
+DELETE /api/contributions/{id}      # Delete contribution
+```
+
+---
+
+## 📂 Project Structure
 
 ```
 learnease-community-platform/
-├── lib/                    # Flutter frontend
-│   ├── main.dart           # Entry point
-│   ├── screens/            # UI screens
-│   ├── models/             # Data models
-│   └── services/           # API & logic
-├── community_server/       # Backend server
-│   ├── bin/server.dart     # REST API server
-│   └── contributions.json  # Data storage
-└── PROJECT_DOCUMENTATION.md
+├── lib/
+│   ├── main.dart                   # App entry point
+│   ├── screens/                    # UI screens
+│   ├── models/                     # Data models
+│   ├── services/                   # Business logic & API
+│   ├── widgets/                    # Reusable widgets
+│   └── data/                       # Static content
+├── community_server/
+│   ├── bin/server.dart             # Dart HTTP server
+│   └── contributions.json          # Data storage
+├── assets/                         # Images and resources
+├── deploy_ngrok.ps1                # Deployment automation
+└── PROJECT_DOCUMENTATION.md        # Detailed documentation
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Technology Stack
 
-| Layer      | Technology         |
-| ---------- | ------------------ |
-| Frontend   | Flutter 3.x (Dart) |
-| Backend    | Dart Shelf         |
-| Database   | JSON file          |
-| Deployment | ngrok tunnel       |
+- **Frontend**: Flutter 3.x, Dart, Provider (state management)
+- **Backend**: Dart Shelf server, RESTful API
+- **Storage**: JSON file-based persistence
+- **Deployment**: ngrok for public access
 
 ---
 
-## 📱 Core Features
+## 📚 Documentation
 
-* 🧠 Learn Java & DBMS concepts
-* 🧩 Take quizzes and coding exercises
-* ✍️ Add & manage your own content
-* 🏅 Track progress and achievements
-* 🌗 Dark/light theme support
+For comprehensive documentation including:
+- Detailed file explanations
+- Architecture overview
+- API documentation
+- Deployment guide
+
+See: [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md)
 
 ---
 
-## 🚀 Architecture
+## 🎯 Key Features
 
-```
-Flutter Frontend ──> REST API ──> Dart Backend ──> ngrok Tunnel (Public)
-```
+### Learning Features
+- Interactive quizzes with instant feedback
+- Fill-in-the-blank coding exercises
+- Java and DBMS course content
+- Code examples with syntax highlighting
+
+### Community Features
+- User-contributed content
+- Real-time content synchronization
+- Content management (add/edit/delete)
+- Author attribution
+
+### Gamification
+- Achievement badges
+- Progress tracking
+- Learning statistics
 
 ---
 
 ## 🤝 Contributing
 
-1. Fork the repo
-2. Create a branch (`feature/new-feature`)
-3. Commit & push your changes
-4. Submit a Pull Request
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Open a Pull Request
 
 ---
 
-## 📊 Quick Stats
+## � Contributors
 
-* 🧾 15 UI screens
-* 📦 5 data models
-* 🔧 6 services
-* 🌍 8 REST endpoints
-* 💻 5000+ lines of code
+This project was made possible by the contributions of:
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/vardhan0811">
+        <img src="https://github.com/vardhan0811.png" width="100px;" alt="Vardhan"/>
+        <br />
+        <sub><b>Vardhan</b></sub>
+      </a>
+      <br />
+      <sub>Core Developer</sub>
+    </td>
+    <td align="center">
+      <a href="https://github.com/sathvik7137">
+        <img src="https://github.com/sathvik7137.png" width="100px;" alt="Sathvik"/>
+        <br />
+        <sub><b>Sathvik</b></sub>
+      </a>
+      <br />
+      <sub>Project Lead</sub>
+    </td>
+    <td align="center">
+      <a href="https://github.com/nishu-kumari-14">
+        <img src="https://github.com/nishu-kumari-14.png" width="100px;" alt="Nishu Kumari"/>
+        <br />
+        <sub><b>Nishu Kumari</b></sub>
+      </a>
+      <br />
+      <sub>UI/UX Designer</sub>
+    </td>
+    <td align="center">
+      <a href="https://github.com/Ankith2422">
+        <img src="https://github.com/Ankith2422.png" width="100px;" alt="Ankith"/>
+        <br />
+        <sub><b>Ankith</b></sub>
+      </a>
+      <br />
+      <sub>Backend Developer</sub>
+    </td>
+    <td align="center">
+      <a href="https://github.com/yourusername">
+        <img src="https://avatars.githubusercontent.com/u/0?v=4" width="100px;" alt="Srivatsa"/>
+        <br />
+        <sub><b>Srivatsa</b></sub>
+      </a>
+      <br />
+      <sub>Contributor</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
-## 📝 License
+## �📧 Contact
 
-Open Source under the **MIT License**.
-
----
-
-## 📧 Contact
-
-* **Author:** [@sathvik7137](https://github.com/sathvik7137)
-* **Repo:** [LearnEase Community Platform](https://github.com/sathvik7137/learnease-community-platform)
-* **Issues:** [Report Here](https://github.com/sathvik7137/learnease-community-platform/issues)
+For questions or support, please open an issue on GitHub.
 
 ---
 
 <div align="center">
-
-**Made with ❤️ using Flutter and Dart**
-⭐ *Star this repo if you find it helpful!*
-
+  
+  **Made with ❤️ using Flutter and Dart**
+  
+  ⭐ Star this repo if you find it helpful!
+  
 </div>
-
----
-
-
