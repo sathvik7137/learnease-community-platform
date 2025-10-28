@@ -209,8 +209,8 @@ This project was made possible by the contributions of:
       <sub>Project Lead</sub>
     </td>
     <td align="center">
-      <a href="https://github.com/nishu-kumari-14">
-        <img src="https://github.com/nishu-kumari-14.png" width="100px;" alt="Nishu Kumari"/>
+      <a href="https://github.com/nishu-kumari14">
+        <img src="https://github.com/nishu-kumari14.png" width="100px;" alt="Nishu Kumari"/>
         <br />
         <sub><b>Nishu Kumari</b></sub>
       </a>
@@ -253,3 +253,4 @@ For questions or support, please open an issue on GitHub.
   ⭐ Star this repo if you find it helpful!
   
 </div>
+
