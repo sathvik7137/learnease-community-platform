@@ -227,8 +227,8 @@ This project was made possible by the contributions of:
       <sub>Backend Developer</sub>
     </td>
     <td align="center">
-      <a href="https://github.com/yourusername">
-        <img src="https://avatars.githubusercontent.com/u/0?v=4" width="100px;" alt="Srivatsa"/>
+      <a href="https://github.com/srivatsa2512">
+        <img src="https://github.com/srivatsa2512.png" width="100px;" alt="Srivatsa"/>
         <br />
         <sub><b>Srivatsa</b></sub>
       </a>
@@ -253,4 +253,5 @@ For questions or support, please open an issue on GitHub.
   ⭐ Star this repo if you find it helpful!
   
 </div>
+
 
