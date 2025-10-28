@@ -233,7 +233,7 @@ This project was made possible by the contributions of:
         <sub><b>Srivatsa</b></sub>
       </a>
       <br />
-      <sub>Contributor</sub>
+      <sub>Tester</sub>
     </td>
   </tr>
 </table>
@@ -253,6 +253,7 @@ For questions or support, please open an issue on GitHub.
   ⭐ Star this repo if you find it helpful!
   
 </div>
+
 
 
 
