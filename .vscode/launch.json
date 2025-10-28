@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "LearnEase (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": ["--web-browser-flag", "--disable-web-security"],
+      "preLaunchTask": "Start Community Server"
+    },
+    {
+      "name": "LearnEase (Chrome - Server Already Running)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": ["--web-browser-flag", "--disable-web-security"]
+    }
+  ],
+  "compounds": []
+}

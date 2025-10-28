@@ -1,0 +1,44 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Community Server",
+      "type": "shell",
+      "command": "dart",
+      "args": ["run", "bin/server.dart"],
+      "options": {
+        "cwd": "${workspaceFolder}/community_server"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false
+      }
+    },
+    {
+      "label": "Start Flutter App",
+      "type": "flutter",
+      "command": "flutter",
+      "args": ["run", "-d", "chrome"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Start LearnEase App",
+      "dependsOn": ["Start Community Server"],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always"
+      },
+      "runOptions": {
+        "runOn": "default"
+      }
+    }
+  ]
+}
