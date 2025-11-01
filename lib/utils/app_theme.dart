@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+// Helper to add Noto Sans as fallback for comprehensive Unicode support
+TextStyle _addNotoSansFallback(TextStyle style) {
+  return style.copyWith(
+    fontFamilyFallback: const ['NotoSans', 'Roboto'],
+  );
+}
+
 class AppTheme {
   // Primary Colors
   static const Color primaryColorLight = Color(0xFF5C6BC0);
