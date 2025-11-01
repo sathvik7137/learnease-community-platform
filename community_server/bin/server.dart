@@ -53,9 +53,11 @@ final List<Map<String, dynamic>> sessionsCache = [];
 void _initDb() {
   try {
     // Use absolute path to users.db in the community_server directory
-    final dbPath = '${Directory.current.path}${Platform.pathSeparator}users.db';
-    print('📂 Opening database at: $dbPath');
-    db = sqlite3.open(dbPath);
+    final scriptDir = File(Platform.script.path).parent.path;
+    final dbPath = '$scriptDir${Platform.pathSeparator}..${Platform.pathSeparator}users.db';
+    final absolutePath = File(dbPath).absolute.path;
+    print('📂 Opening database at: $absolutePath');
+    db = sqlite3.open(absolutePath);
     
     // Create tables if they don't exist
     db.execute('''
