@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
-import 'package:flutter/services.dart';
 import '../models/user_content.dart';
 import '../services/user_content_service.dart';
 import '../widgets/username_setup_dialog.dart';
+import 'bulk_import_screen.dart';
 
 class AddContentScreen extends StatefulWidget {
   final UserContent? existingContent; // For editing
@@ -196,6 +196,21 @@ class _AddContentScreenState extends State<AddContentScreen> {
       appBar: AppBar(
         title: Text(widget.existingContent != null ? 'Edit Content' : 'Add Content'),
         actions: [
+          // Bulk import button (only for new content, not editing)
+          if (widget.existingContent == null)
+            IconButton(
+              icon: const Icon(Icons.upload_file),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const BulkImportScreen()),
+                );
+                if (result == true && context.mounted) {
+                  Navigator.pop(context, true); // Return to community screen
+                }
+              },
+              tooltip: 'Bulk Import',
+            ),
           IconButton(
             icon: const Icon(Icons.help_outline),
             onPressed: () => _showHelpDialog(),

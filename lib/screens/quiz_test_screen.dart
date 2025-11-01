@@ -4,11 +4,16 @@ import '../models/course.dart';
 import '../models/user_content.dart';
 import '../services/local_storage.dart';
 import '../services/community_integration_service.dart';
+import '../services/auth_service.dart';
+import '../utils/app_theme.dart';
 import 'quiz_screen.dart';
 import 'fill_blanks_screen.dart';
 import 'community_contributions_screen.dart';
+import 'sign_in_screen.dart';
 
 class QuizTestScreen extends StatefulWidget {
+  const QuizTestScreen({super.key});
+
   @override
   State<QuizTestScreen> createState() => _QuizTestScreenState();
 }
@@ -18,6 +23,7 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
   Map<String, int?> fillBlankScores = {};
   bool isLoading = true;
   Map<CourseCategory, Map<ContentType, int>> communityStats = {};
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
@@ -49,6 +55,173 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
     setState(() => isLoading = false);
   }
 
+  // Check if user is logged in
+  Future<bool> _isUserLoggedIn() async {
+    final token = await _authService.getToken();
+    return token != null && token.isNotEmpty;
+  }
+
+  // Handle quiz navigation with authentication check
+  Future<void> _handleQuizPress(Topic topic) async {
+    final isLoggedIn = await _isUserLoggedIn();
+    
+    if (!isLoggedIn) {
+      _showLoginPromptDialog('quiz');
+    } else {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => QuizScreen(topic: topic),
+        ),
+      );
+      _loadProgress();
+    }
+  }
+
+  // Handle mock test navigation with authentication check
+  Future<void> _handleMockTestPress(Course course) async {
+    final isLoggedIn = await _isUserLoggedIn();
+    
+    if (!isLoggedIn) {
+      _showLoginPromptDialog('mock test');
+    } else {
+      // Create a mock test with questions from all topics
+      final allQuestions = <Question>[];
+      for (final topic in course.topics) {
+        allQuestions.addAll(topic.quizQuestions);
+      }
+      
+      // Limit to 15 questions and shuffle them
+      allQuestions.shuffle();
+      final mockTestQuestions = allQuestions.take(15).toList();
+      
+      if (mockTestQuestions.isNotEmpty) {
+        // Create a temporary topic to hold the mock test questions
+        final mockTestTopic = Topic(
+          id: 'mock_test_${course.id}',
+          title: '${course.name} Mock Test',
+          explanation: '',
+          codeSnippet: '',
+          revisionPoints: [],
+          quizQuestions: mockTestQuestions,
+        );
+        
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => QuizScreen(
+              topic: mockTestTopic,
+              isMockTest: true,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  // Handle fill blanks navigation with authentication check
+  Future<void> _handleFillBlanksPress(Course course) async {
+    final isLoggedIn = await _isUserLoggedIn();
+    
+    if (!isLoggedIn) {
+      _showLoginPromptDialog('fill-in-the-blanks exercises');
+    } else {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => FillBlanksScreen(course: course),
+        ),
+      );
+      _loadProgress();
+    }
+  }
+
+  // Show dialog prompting user to login
+  void _showLoginPromptDialog(String activityType) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.lock_outline, color: Colors.blue, size: 28),
+              SizedBox(width: 8),
+              Text('Login Required'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Please login to access $activityType and track your progress.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 16),
+              Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.blue, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Save your scores', style: TextStyle(fontSize: 14)),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.blue, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Track your progress', style: TextStyle(fontSize: 14)),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.blue, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Unlock achievements', style: TextStyle(fontSize: 14)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Maybe Later'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SignInScreen(),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text('Sign In'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   bool _isQuizCompleted(String topicId) {
     return (quizScores[topicId] ?? 0) > 0;
   }
@@ -59,12 +232,15 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
+
     return DefaultTabController(
       length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Quiz & Tests'),
-          backgroundColor: Colors.indigo,
+          backgroundColor: colors.primary,
           foregroundColor: Colors.white,
           bottom: const TabBar(
             labelColor: Colors.white,
@@ -81,16 +257,19 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
             ? const Center(child: CircularProgressIndicator())
             : TabBarView(
                 children: [
-                  _buildQuizzesTab(),
-                  _buildMockTestsTab(),
-                  _buildFillBlanksTab(),
+                  _buildQuizzesTab(context),
+                  _buildMockTestsTab(context),
+                  _buildFillBlanksTab(context),
                 ],
               ),
       ),
     );
   }
 
-  Widget _buildQuizzesTab() {
+  Widget _buildQuizzesTab(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -102,7 +281,7 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
           ),
           const SizedBox(height: 16),
           // Community quizzes banner
-          _buildCommunityBanner(ContentType.quiz),
+          _buildCommunityBanner(ContentType.quiz, context),
           const SizedBox(height: 16),
           Expanded(
             child: ListView.builder(
@@ -122,7 +301,7 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: isCompleted ? Colors.green : Colors.grey[300],
+                          color: isCompleted ? Colors.green : (isDark ? Colors.grey[700] : Colors.grey[300]),
                           shape: BoxShape.circle,
                         ),
                         child: Center(
@@ -131,7 +310,7 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
                               : Text(
                                   '${index + 1}',
                                   style: TextStyle(
-                                    color: Colors.grey[700],
+                                    color: isDark ? Colors.white70 : Colors.grey[700],
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
                                   ),
@@ -142,7 +321,7 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
                         topic.title.replaceFirst(RegExp(r'^\d+\.\s*'), ''),
                         style: TextStyle(
                           fontWeight: isCompleted ? FontWeight.w600 : FontWeight.normal,
-                          color: isCompleted ? Colors.green[700] : Colors.black87,
+                          color: isCompleted ? Colors.green[700] : (isDark ? Colors.white : Colors.black87),
                         ),
                       ),
                       subtitle: isCompleted
@@ -155,16 +334,7 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
                             )
                           : null,
                       trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => QuizScreen(topic: topic),
-                          ),
-                        );
-                        // Reload progress when returning
-                        _loadProgress();
-                      },
+                      onTap: () => _handleQuizPress(topic),
                     );
                   }).toList(),
                 );
@@ -176,7 +346,10 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
     );
   }
 
-  Widget _buildCommunityBanner(ContentType type) {
+  Widget _buildCommunityBanner(ContentType type, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
+
     final javaCount = communityStats[CourseCategory.java]?[type] ?? 0;
     final dbmsCount = communityStats[CourseCategory.dbms]?[type] ?? 0;
     final totalCount = javaCount + dbmsCount;
@@ -198,7 +371,7 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
     }
 
     return Material(
-      color: Colors.blue.withOpacity(0.1),
+      color: colors.primary.withOpacity(0.1),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: () {
@@ -213,12 +386,12 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.blue),
+            border: Border.all(color: colors.primary),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             children: [
-              const Icon(Icons.people, color: Colors.blue, size: 32),
+              Icon(Icons.people, color: colors.primary, size: 32),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -226,10 +399,10 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
                   children: [
                     Text(
                       '🌐 Community $typeLabel Available!',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Colors.blue,
+                        color: colors.primary,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -237,13 +410,13 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
                       '$totalCount community-contributed $typeLabel (Java: $javaCount, DBMS: $dbmsCount)',
                       style: TextStyle(
                         fontSize: 13,
-                        color: Colors.grey[700],
+                        color: isDark ? Colors.white70 : Colors.grey[700],
                       ),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios, color: Colors.blue, size: 16),
+              Icon(Icons.arrow_forward_ios, color: colors.primary, size: 16),
             ],
           ),
         ),
@@ -251,7 +424,10 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
     );
   }
 
-  Widget _buildMockTestsTab() {
+  Widget _buildMockTestsTab(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -273,37 +449,7 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
                     title: Text(course.name),
                     subtitle: const Text('15-20 questions from all topics'),
                     trailing: const Icon(Icons.arrow_forward_ios),
-                    onTap: () {
-                      // Create a mock test with questions from all topics
-                      final allQuestions = <Question>[];
-                      for (final topic in course.topics) {
-                        allQuestions.addAll(topic.quizQuestions);
-                      }
-                      
-                      // Limit to 15 questions and shuffle them
-                      allQuestions.shuffle();
-                      final mockTestQuestions = allQuestions.take(15).toList();
-                      
-                      // Create a temporary topic to hold the mock test questions
-                      final mockTestTopic = Topic(
-                        id: 'mock_test_${course.id}',
-                        title: '${course.name} Mock Test',
-                        explanation: '',
-                        codeSnippet: '',
-                        revisionPoints: [],
-                        quizQuestions: mockTestQuestions,
-                      );
-                      
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => QuizScreen(
-                            topic: mockTestTopic,
-                            isMockTest: true,
-                          ),
-                        ),
-                      );
-                    },
+                    onTap: () => _handleMockTestPress(course),
                   ),
                 );
               },
@@ -314,7 +460,10 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
     );
   }
 
-  Widget _buildFillBlanksTab() {
+  Widget _buildFillBlanksTab(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -326,7 +475,7 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
           ),
           const SizedBox(height: 16),
           // Community fill blanks banner
-          _buildCommunityBanner(ContentType.fillBlank),
+          _buildCommunityBanner(ContentType.fillBlank, context),
           const SizedBox(height: 16),
           Expanded(
             child: ListView.builder(
@@ -351,24 +500,24 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
                       width: 50,
                       height: 50,
                       decoration: BoxDecoration(
-                        color: completedCount > 0 ? Colors.green.withOpacity(0.1) : Colors.grey[100],
+                        color: completedCount > 0 ? Colors.green.withOpacity(0.1) : (isDark ? Colors.grey[800] : Colors.grey[100]),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: completedCount > 0 ? Colors.green : Colors.grey[300]!,
+                          color: completedCount > 0 ? Colors.green : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
                           width: 2,
                         ),
                       ),
                       child: Center(
                         child: completedCount > 0
                             ? Icon(Icons.check_circle, color: Colors.green, size: 30)
-                            : Icon(Icons.edit_note, color: Colors.grey[400], size: 30),
+                            : Icon(Icons.edit_note, color: isDark ? Colors.grey[600] : Colors.grey[400], size: 30),
                       ),
                     ),
                     title: Text(
                       course.name,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: completedCount > 0 ? Colors.green[700] : Colors.black87,
+                        color: completedCount > 0 ? Colors.green[700] : (isDark ? Colors.white : Colors.black87),
                       ),
                     ),
                     subtitle: completedCount > 0
@@ -381,16 +530,7 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
                           )
                         : const Text('Fill in the blanks exercises'),
                     trailing: const Icon(Icons.arrow_forward_ios),
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => FillBlanksScreen(course: course),
-                        ),
-                      );
-                      // Reload progress when returning
-                      _loadProgress();
-                    },
+                    onTap: () => _handleFillBlanksPress(course),
                   ),
                 );
               },

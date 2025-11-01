@@ -2,9 +2,14 @@ import 'package:flutter/material.dart';
 import '../data/course_content.dart';
 import '../models/course.dart';
 import '../services/local_storage.dart';
+import '../utils/app_theme.dart';
 import 'course_detail_screen.dart';
+import 'sign_in_screen.dart';
+import '../services/auth_service.dart';
 
 class CoursesScreen extends StatefulWidget {
+  const CoursesScreen({super.key});
+
   @override
   _CoursesScreenState createState() => _CoursesScreenState();
 }
@@ -51,14 +56,17 @@ class _CoursesScreenState extends State<CoursesScreen> {
   
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         elevation: 4,
-        shadowColor: Colors.indigo.withOpacity(0.5),
+        shadowColor: colors.primary.withOpacity(0.5),
         flexibleSpace: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF5C6BC0), Color(0xFF3F51B5)],
+              colors: [colors.primary, colors.secondary],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -90,11 +98,15 @@ class _CoursesScreenState extends State<CoursesScreen> {
         // Gradient background
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Colors.indigo.shade50,
-              Colors.blue.shade50,
-              Colors.purple.shade50.withOpacity(0.3),
-            ],
+            colors: isDark
+                ? [
+                    colors.surface,
+                    colors.surface.withOpacity(0.8),
+                  ]
+                : [
+                    colors.primary.withOpacity(0.05),
+                    colors.secondary.withOpacity(0.05),
+                  ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -104,12 +116,12 @@ class _CoursesScreenState extends State<CoursesScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Available Courses',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A237E),
+                  color: colors.onSurface,
                 ),
               ),
               const SizedBox(height: 20),
@@ -124,7 +136,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
                     itemCount: courses.length,
                     itemBuilder: (context, index) {
                       final course = courses[index];
-                      return _buildCourseCard(course);
+                      return _buildCourseCard(course, context);
                     },
                   ),
                 ),
@@ -136,7 +148,10 @@ class _CoursesScreenState extends State<CoursesScreen> {
     );
   }
   
-  Widget _buildCourseCard(Course course) {
+  Widget _buildCourseCard(Course course, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
       child: ScaleOnTap(
@@ -144,23 +159,36 @@ class _CoursesScreenState extends State<CoursesScreen> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             gradient: LinearGradient(
-              colors: [Colors.white, Colors.indigo.shade50.withOpacity(0.3)],
+              colors: isDark
+                  ? [colors.surface, colors.surface.withOpacity(0.8)]
+                  : [Colors.white, colors.primary.withOpacity(0.05)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.indigo.withOpacity(0.15),
+                color: colors.primary.withOpacity(0.15),
                 blurRadius: 15,
                 offset: const Offset(0, 8),
               ),
             ],
           ),
-          child: Material(
+              child: Material(
             color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(20),
-              onTap: () {
+              onTap: () async {
+                final token = await AuthService().getToken();
+                if (token == null) {
+                  // Ask user to sign in first
+                  final res = await Navigator.push<bool?>(
+                    context,
+                    MaterialPageRoute(builder: (context) => SignInScreen()),
+                  );
+                  // If user signed in (or returned true), proceed to course
+                  final newToken = await AuthService().getToken();
+                  if (newToken == null) return;
+                }
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -179,8 +207,8 @@ class _CoursesScreenState extends State<CoursesScreen> {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            Color(0xFF5C6BC0),
-                            Color(0xFF7E57C2),
+                            colors.primary,
+                            colors.secondary,
                           ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
@@ -188,7 +216,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.indigo.withOpacity(0.3),
+                            color: colors.primary.withOpacity(0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 4),
                           ),
@@ -210,17 +238,17 @@ class _CoursesScreenState extends State<CoursesScreen> {
                         children: [
                           Text(
                             course.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 19,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF1A237E),
+                              color: colors.onSurface,
                             ),
                           ),
                           const SizedBox(height: 6),
                           Text(
                             course.description,
                             style: TextStyle(
-                              color: Colors.grey.shade700,
+                              color: isDark ? Colors.white70 : Colors.grey.shade700,
                               fontSize: 13,
                             ),
                             maxLines: 2,
@@ -237,7 +265,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
                                     borderRadius: BorderRadius.circular(4),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.indigo.withOpacity(0.2),
+                                        color: colors.primary.withOpacity(0.2),
                                         blurRadius: 4,
                                         offset: const Offset(0, 2),
                                       ),
@@ -247,7 +275,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
                                     borderRadius: BorderRadius.circular(4),
                                     child: LinearProgressIndicator(
                                       value: isLoading ? 0.0 : courseProgress[course.id] ?? 0.0,
-                                      backgroundColor: Colors.grey.shade300,
+                                      backgroundColor: isDark ? Colors.grey[700] : Colors.grey[300],
                                       valueColor: AlwaysStoppedAnimation<Color>(
                                         course.id == 'java' ? Colors.orange.shade600 : Colors.blue.shade600,
                                       ),
@@ -292,12 +320,12 @@ class _CoursesScreenState extends State<CoursesScreen> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.indigo.shade50,
+                        color: colors.primary.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.arrow_forward_ios,
-                        color: Color(0xFF5C6BC0),
+                        color: colors.primary,
                         size: 16,
                       ),
                     ),
@@ -316,7 +344,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
 class ScaleOnTap extends StatefulWidget {
   final Widget child;
 
-  const ScaleOnTap({Key? key, required this.child}) : super(key: key);
+  const ScaleOnTap({super.key, required this.child});
 
   @override
   _ScaleOnTapState createState() => _ScaleOnTapState();

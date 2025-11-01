@@ -19930,10 +19930,10 @@ Use **cron jobs** (Linux) or **Task Scheduler** (Windows) for scheduled backups.
 
 ```bash
 # Daily full backup at 2 AM
-0 2 * * * /usr/bin/mysqldump -u backup_user -p'password' school_db > /backups/daily_\`date +\\%Y\\%m\\%d\`.sql
+0 2 * * * /usr/bin/mysqldump -u backup_user -p'password' school_db > /backups/daily_`date +\\%Y\\%m\\%d`.sql
 
 # Weekly full backup on Sunday at 1 AM
-0 1 * * 0 /usr/bin/pg_dump -U postgres school_db -f /backups/weekly_\`date +\\%Y\\%m\\%d\`.dump
+0 1 * * 0 /usr/bin/pg_dump -U postgres school_db -f /backups/weekly_`date +\\%Y\\%m\\%d`.dump
 
 # Hourly incremental (custom script)
 0 * * * * /scripts/incremental_backup.sh
@@ -28059,7 +28059,7 @@ DELIMITER ;
 SHOW TRIGGERS;
 
 -- Show triggers for specific table
-SHOW TRIGGERS WHERE \`Table\` = 'employees';
+SHOW TRIGGERS WHERE `Table` = 'employees';
 
 -- Show trigger definition
 SHOW CREATE TRIGGER after_employee_insert;

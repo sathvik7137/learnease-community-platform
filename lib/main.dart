@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'dart:io' show Platform;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:provider/provider.dart';
+import 'screens/chat_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/courses_screen.dart';
 import 'screens/quiz_test_screen.dart';
@@ -7,30 +11,68 @@ import 'screens/profile_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/community_contributions_screen.dart';
 import 'services/sound_service.dart';
+import 'providers/theme_provider.dart';
+import 'utils/app_theme.dart';
 
-void main() {
-  runApp(LearnEaseApp());
+Future<void> main() async {
+  // Load environment variables (AI_API_BASE, AI_API_KEY) if present
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Only load .env on native platforms (not on web, where assets work differently)
+  // On web, .env would need to be served from the public folder differently
+  if (!kIsWeb) {
+    try {
+      await dotenv.load(fileName: '.env');
+    } catch (e) {
+      // Silently ignore - AI functionality will work without .env
+    }
+  }
+  
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => ThemeProvider(),
+      child: const LearnEaseApp(),
+    ),
+  );
 }
 
+// Check if running on web (works across all platforms)
+const kIsWeb = bool.fromEnvironment('dart.library.js_util');
+
 class LearnEaseApp extends StatelessWidget {
+  const LearnEaseApp({super.key});
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'LearnEase: Java & DBMS Tutorials',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF5C6BC0),
-          brightness: Brightness.light,
-        ),
-      ),
-      home: const SplashScreen(),
-      debugShowCheckedModeBanner: false,
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, _) {
+        return MaterialApp(
+          title: 'LearnEase: Java & DBMS Tutorials',
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: themeProvider.themeMode,
+          home: const SplashScreen(),
+          routes: {
+            '/chat': (ctx) => const ChatScreen(),
+          },
+          // Disable all debug features to suppress DevTools errors on web
+          debugShowCheckedModeBanner: false,
+          showPerformanceOverlay: false,
+          debugShowMaterialGrid: false,
+          // Disable widget inspector on web to prevent DevTools errors
+          builder: (context, child) {
+            // On web, return child without widget inspector
+            return child ?? const SplashScreen();
+          },
+        );
+      },
     );
   }
 }
 
 class MainNavigation extends StatefulWidget {
+  const MainNavigation({super.key});
+
   @override
   State<MainNavigation> createState() => _MainNavigationState();
 }
@@ -57,6 +99,9 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
+    
     return Scaffold(
       body: _screens[_selectedIndex],
       extendBody: true, // Allows body to extend behind the bottom nav
@@ -66,13 +111,13 @@ class _MainNavigationState extends State<MainNavigation> {
           borderRadius: BorderRadius.circular(30),
           boxShadow: [
             BoxShadow(
-              color: Colors.indigo.withOpacity(0.3),
+              color: colors.primary.withOpacity(isDark ? 0.2 : 0.3),
               blurRadius: 20,
               offset: const Offset(0, 10),
               spreadRadius: 0,
             ),
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
               blurRadius: 10,
               offset: const Offset(0, 5),
             ),
@@ -85,16 +130,23 @@ class _MainNavigationState extends State<MainNavigation> {
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    Colors.white.withOpacity(0.9),
-                    Colors.white.withOpacity(0.8),
-                  ],
+                  colors: isDark
+                      ? [
+                          Colors.white.withOpacity(0.05),
+                          Colors.white.withOpacity(0.03),
+                        ]
+                      : [
+                          Colors.white.withOpacity(0.9),
+                          Colors.white.withOpacity(0.8),
+                        ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(30),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.5),
+                  color: isDark
+                      ? Colors.white.withOpacity(0.1)
+                      : Colors.white.withOpacity(0.5),
                   width: 1.5,
                 ),
               ),
@@ -115,11 +167,25 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
         ),
       ),
+      // Small floating chat button positioned slightly above the bottom nav
+      floatingActionButton: Container(
+        margin: const EdgeInsets.only(bottom: 32.0, right: 14.0),
+        child: FloatingActionButton.small(
+          onPressed: () {
+            Navigator.of(context).pushNamed('/chat');
+          },
+          foregroundColor: Colors.white,
+          child: const Icon(Icons.chat_bubble_outline),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
   Widget _buildNavItem(int index, IconData icon, IconData activeIcon, String label) {
     final isSelected = _selectedIndex == index;
+    final colors = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return GestureDetector(
       onTap: () => _onItemTapped(index),
@@ -134,8 +200,8 @@ class _MainNavigationState extends State<MainNavigation> {
           gradient: isSelected
               ? LinearGradient(
                   colors: [
-                    const Color(0xFF5C6BC0).withOpacity(0.2),
-                    const Color(0xFF7E57C2).withOpacity(0.2),
+                    colors.primary.withOpacity(0.2),
+                    colors.secondary.withOpacity(0.2),
                   ],
                 )
               : null,
@@ -151,8 +217,8 @@ class _MainNavigationState extends State<MainNavigation> {
               child: Icon(
                 isSelected ? activeIcon : icon,
                 color: isSelected 
-                    ? const Color(0xFF5C6BC0)
-                    : Colors.grey.shade600,
+                    ? colors.primary
+                    : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                 size: 26,
               ),
             ),
@@ -163,8 +229,8 @@ class _MainNavigationState extends State<MainNavigation> {
                 fontSize: isSelected ? 12 : 11,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 color: isSelected 
-                    ? const Color(0xFF5C6BC0)
-                    : Colors.grey.shade600,
+                    ? colors.primary
+                    : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
               ),
               child: Text(label),
             ),

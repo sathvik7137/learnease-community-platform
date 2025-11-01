@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import '../models/course.dart';
 import '../services/local_storage.dart';
 import 'topic_detail_screen.dart';
+import '../services/auth_service.dart';
+import 'sign_in_screen.dart';
+import '../utils/app_theme.dart';
 
 class CourseDetailScreen extends StatefulWidget {
   final Course course;
 
-  const CourseDetailScreen({Key? key, required this.course}) : super(key: key);
+  const CourseDetailScreen({super.key, required this.course});
 
   @override
   State<CourseDetailScreen> createState() => _CourseDetailScreenState();
@@ -25,6 +28,24 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
+    // Ensure user is authenticated before loading course progress
+    _ensureAuthAndLoad();
+  }
+
+  Future<void> _ensureAuthAndLoad() async {
+    try {
+      // Lazy import to avoid cycles
+  final token = await AuthService().getToken();
+      if (token == null) {
+        // Redirect to sign-in screen
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          await Navigator.of(context).push(MaterialPageRoute(builder: (_) => SignInScreen()));
+          // After returning, attempt to load progress again
+          _loadProgress();
+        });
+        return;
+      }
+    } catch (_) {}
     _loadProgress();
   }
 
@@ -71,6 +92,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
     // Consistent theme colors
     const primaryColor = Color(0xFF5C6BC0); // LearnEase indigo
     const accentColor = Color(0xFF7E57C2); // Purple accent
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
     
     return Scaffold(
       appBar: AppBar(
@@ -99,15 +122,25 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
       body: Container(
         // Subtle gradient background
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.indigo.shade50,
-              Colors.blue.shade50.withOpacity(0.3),
-              Colors.purple.shade50.withOpacity(0.3),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          color: isDark ? Color(0xFF1A1A2E) : Color(0xFFF9FAFB),
+          gradient: isDark 
+            ? LinearGradient(
+                colors: [
+                  Color(0xFF1A1A2E),
+                  Color(0xFF16213E).withOpacity(0.5),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              )
+            : LinearGradient(
+                colors: [
+                  Colors.indigo.shade50,
+                  Colors.blue.shade50.withOpacity(0.3),
+                  Colors.purple.shade50.withOpacity(0.3),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
         ),
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -142,6 +175,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
                       isCompleted,
                       score,
                       primaryColor,
+                      isDark,
                     ),
                   );
                 },
@@ -157,13 +191,17 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
     bool isCompleted,
     int score,
     Color primaryColor,
+    bool isDark,
   ) {
+    final cardBgColor = isDark ? Color(0xFF2A2A3E) : Colors.white;
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: Material(
-        elevation: 6,
+        elevation: isDark ? 2 : 6,
         shadowColor: primaryColor.withOpacity(0.2),
         borderRadius: BorderRadius.circular(20),
+        color: cardBgColor,
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
           onTap: () async {
@@ -180,19 +218,28 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               gradient: LinearGradient(
-                colors: [
-                  Colors.white,
-                  isCompleted
-                      ? Colors.green.shade50.withOpacity(0.5)
-                      : Colors.indigo.shade50.withOpacity(0.3),
-                ],
+                colors: isDark
+                  ? [
+                      isCompleted
+                        ? Color(0xFF2A4A3E)
+                        : Color(0xFF2A2A3E),
+                      isCompleted
+                        ? Color(0xFF3A6A5E).withOpacity(0.5)
+                        : Color(0xFF3A3A52).withOpacity(0.5),
+                    ]
+                  : [
+                      Colors.white,
+                      isCompleted
+                          ? Colors.green.shade50.withOpacity(0.5)
+                          : Colors.indigo.shade50.withOpacity(0.3),
+                    ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               border: Border.all(
                 color: isCompleted
-                    ? Colors.green.withOpacity(0.3)
-                    : Colors.indigo.withOpacity(0.1),
+                    ? Colors.green.withOpacity(isDark ? 0.5 : 0.3)
+                    : Colors.indigo.withOpacity(isDark ? 0.2 : 0.1),
                 width: 1.5,
               ),
             ),
@@ -246,7 +293,11 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
-                            color: isCompleted ? Colors.green.shade800 : const Color(0xFF1A237E),
+                            color: isCompleted
+                              ? Colors.green.shade800
+                              : isDark
+                                ? Colors.white
+                                : const Color(0xFF1A237E),
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -254,7 +305,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Colors.green.shade100,
+                              color: isDark
+                                ? Colors.green.shade900.withOpacity(0.3)
+                                : Colors.green.shade100,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Row(
@@ -265,7 +318,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
                                 Text(
                                   'Score: $score%',
                                   style: TextStyle(
-                                    color: Colors.green.shade700,
+                                    color: isDark
+                                      ? Colors.green.shade300
+                                      : Colors.green.shade700,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -277,7 +332,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
                           Text(
                             'Tap to start learning',
                             style: TextStyle(
-                              color: Colors.grey.shade600,
+                              color: isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
                               fontSize: 13,
                             ),
                           ),
@@ -288,7 +345,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: primaryColor.withOpacity(0.1),
+                      color: primaryColor.withOpacity(isDark ? 0.2 : 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(

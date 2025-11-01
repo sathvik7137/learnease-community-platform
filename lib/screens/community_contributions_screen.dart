@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/user_content.dart';
 import '../services/user_content_service.dart';
+import '../services/auth_service.dart';
+import '../utils/app_theme.dart';
 import 'add_content_screen.dart';
 import 'my_contributions_screen.dart';
+import 'sign_in_screen.dart';
 import 'dart:async';
 
 class CommunityContributionsScreen extends StatefulWidget {
@@ -19,6 +22,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   List<UserContent> _contributions = [];
   ContentType? _filterType;
   StreamSubscription<List<UserContent>>? _realtimeSubscription;
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
@@ -71,89 +75,244 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: FutureBuilder<String?>(
-          future: UserContentService.getUsername(),
-          builder: (context, snapshot) {
-            final username = snapshot.data;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Community Contributions'),
-                if (username != null)
-                  Text(
-                    'Logged in as: $username',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
-                  ),
-              ],
-            );
-          },
+  // Check if user is logged in
+  Future<bool> _isUserLoggedIn() async {
+    final token = await _authService.getToken();
+    return token != null && token.isNotEmpty;
+  }
+
+  // Handle Add Content with authentication check
+  Future<void> _handleAddContentPress() async {
+    final isLoggedIn = await _isUserLoggedIn();
+    
+    if (!isLoggedIn) {
+      // Show login prompt dialog
+      _showLoginPromptDialog();
+    } else {
+      // User is logged in, proceed to Add Content
+      final result = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const AddContentScreen(),
         ),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.code), text: 'Java'),
-            Tab(icon: Icon(Icons.storage), text: 'DBMS'),
-          ],
-        ),
-        actions: [
-          // Add Content Button - prominently displayed in app bar
-          ElevatedButton.icon(
-            onPressed: () async {
-              final result = await Navigator.push<bool>(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AddContentScreen(),
-                ),
-              );
-              if (result == true) {
-                _loadContributions();
-              }
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('Add Content'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-              elevation: 4,
-            ),
+      );
+      if (result == true) {
+        _loadContributions();
+      }
+    }
+  }
+
+  // Show dialog prompting user to login
+  void _showLoginPromptDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.person),
-            tooltip: 'My Contributions',
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const MyContributionsScreen(),
-                ),
-              );
-              _loadContributions();
-            },
-          ),
-          PopupMenuButton<ContentType?>(
-            icon: const Icon(Icons.filter_list),
-            tooltip: 'Filter by type',
-            onSelected: (type) {
-              setState(() {
-                _filterType = type;
-              });
-              _loadContributions();
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: null, child: Text('All Types')),
-              ...ContentType.values.map((type) => PopupMenuItem(
-                value: type,
-                child: Text(_getTypeLabel(type)),
-              )),
+          title: Row(
+            children: [
+              Icon(Icons.lock_outline, color: Colors.green, size: 28),
+              SizedBox(width: 8),
+              Text('Login Required'),
             ],
           ),
-        ],
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Please login to contribute content to the community.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 16),
+              Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Share your knowledge', style: TextStyle(fontSize: 14)),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Help others learn', style: TextStyle(fontSize: 14)),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Build your reputation', style: TextStyle(fontSize: 14)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Maybe Later'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Navigate to sign-in screen
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SignInScreen(),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text('Sign In'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(140),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF5C6BC0),
+                const Color(0xFF7E57C2),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF5C6BC0).withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            title: FutureBuilder<String?>(
+              future: UserContentService.getUsername(),
+              builder: (context, snapshot) {
+                final username = snapshot.data;
+                final categoryName = _tabController.index == 0 ? 'Java' : 'DBMS';
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Community Contributions',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      categoryName,
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                    if (username != null)
+                      Text(
+                        'Logged in as: $username',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.normal,
+                          color: Colors.white60,
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+            actions: [
+              // Add Content Button - prominently displayed in app bar
+              ElevatedButton.icon(
+                onPressed: _handleAddContentPress,
+                icon: const Icon(Icons.add),
+                label: const Text('Add Content'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  elevation: 4,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.person),
+                tooltip: 'My Contributions',
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const MyContributionsScreen(),
+                    ),
+                  );
+                  _loadContributions();
+                },
+              ),
+              PopupMenuButton<ContentType?>(
+                icon: const Icon(Icons.filter_list),
+                tooltip: 'Filter by type',
+                onSelected: (type) {
+                  setState(() {
+                    _filterType = type;
+                  });
+                  _loadContributions();
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: null, child: Text('All Types')),
+                  ...ContentType.values.map((type) => PopupMenuItem(
+                    value: type,
+                    child: Text(_getTypeLabel(type)),
+                  )),
+                ],
+              ),
+            ],
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(48),
+              child: TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(icon: Icon(Icons.code), text: 'Java'),
+                  Tab(icon: Icon(Icons.storage), text: 'DBMS'),
+                ],
+                indicatorColor: Colors.white,
+                labelColor: Colors.white,
+              ),
+            ),
+          ),
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -166,11 +325,11 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
                     itemCount: _contributions.length,
                     itemBuilder: (context, index) {
                       final content = _contributions[index];
-                      return FutureBuilder<String?>(
-                        future: UserContentService.getUsername(),
+                      return FutureBuilder<Map<String, String?>>(
+                        future: _getCurrentUserInfo(),
                         builder: (context, snapshot) {
-                          final currentUsername = snapshot.data;
-                          return _buildContentCard(content, currentUsername);
+                          final userInfo = snapshot.data ?? {'username': null, 'email': null};
+                          return _buildContentCard(content, userInfo['username'], userInfo['email']);
                         },
                       );
                     },
@@ -202,17 +361,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
             ),
             SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: () async {
-                final result = await Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AddContentScreen(),
-                  ),
-                );
-                if (result == true) {
-                  _loadContributions();
-                }
-              },
+              onPressed: _handleAddContentPress,
               icon: Icon(Icons.add),
               label: Text('Add Content'),
             ),
@@ -222,14 +371,24 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     );
   }
 
-  Widget _buildContentCard(UserContent content, String? currentUsername) {
+  // Helper method to get current user's info (username and email)
+  Future<Map<String, String?>> _getCurrentUserInfo() async {
+    final username = await UserContentService.getUsername();
+    final email = await _authService.getUserEmail();
+    return {'username': username, 'email': email};
+  }
+
+  Widget _buildContentCard(UserContent content, String? currentUsername, String? currentEmail) {
     final title = _getContentTitle(content);
     final subtitle = _getContentSubtitle(content);
+    
+    // Check ownership by comparing username OR email prefix (from old registration)
     final isOwner = currentUsername != null && 
-                    currentUsername.trim().toLowerCase() == content.authorName.trim().toLowerCase();
+                    (currentUsername.trim().toLowerCase() == content.authorName.trim().toLowerCase() ||
+                     currentEmail != null && currentEmail.split('@')[0].toLowerCase() == content.authorName.trim().toLowerCase());
     
     // Debug: print ownership check
-    print('Current user: "$currentUsername", Content author: "${content.authorName}", Is owner: $isOwner');
+    print('Current user: "$currentUsername" (email: "$currentEmail"), Content author: "${content.authorName}", Is owner: $isOwner');
     
     return Card(
       margin: EdgeInsets.only(bottom: 12.0),
@@ -429,10 +588,18 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   }
 
   Future<void> _editContent(UserContent content) async {
-    // TODO: Implement edit content navigation
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Edit functionality coming soon!')),
+    // Navigate to AddContentScreen in edit mode
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddContentScreen(existingContent: content),
+      ),
     );
+    
+    // Refresh the list if the user successfully edited
+    if (result == true) {
+      _loadContributions();
+    }
   }
 
   Future<void> _deleteContent(UserContent content) async {

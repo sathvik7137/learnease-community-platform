@@ -9,7 +9,7 @@ import 'fill_blank_exercise_screen.dart';
 class FillBlanksScreen extends StatefulWidget {
   final Course course;
   
-  const FillBlanksScreen({Key? key, required this.course}) : super(key: key);
+  const FillBlanksScreen({super.key, required this.course});
   
   @override
   _FillBlanksScreenState createState() => _FillBlanksScreenState();

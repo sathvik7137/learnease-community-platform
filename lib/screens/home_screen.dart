@@ -3,7 +3,10 @@ import 'dart:math';
 import '../data/course_content.dart';
 import '../models/course.dart';
 import '../services/local_storage.dart';
+import '../services/auth_service.dart';
+import '../utils/app_theme.dart';
 import 'quiz_screen.dart';
+import 'sign_in_screen.dart';
 import 'package:flutter/services.dart';
 
 // Confetti particle model
@@ -38,7 +41,7 @@ class ConfettiParticle {
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -80,6 +83,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // Daily challenge state
   bool _isDailyChallengeExpanded = false;
   int _challengesCompletedThisWeek = 0;
+  
+  // Auth service for login check
+  final AuthService _authService = AuthService();
   
   // Username for personalized greeting
   
@@ -362,6 +368,122 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return randomCourse.topics[_random.nextInt(randomCourse.topics.length)];
   }
   
+  // Check if user is logged in
+  Future<bool> _isUserLoggedIn() async {
+    final token = await _authService.getToken();
+    return token != null && token.isNotEmpty;
+  }
+  
+  // Handle Daily Challenge tap with authentication check
+  Future<void> _handleDailyChallengePress(Topic randomTopic) async {
+    final isLoggedIn = await _isUserLoggedIn();
+    
+    if (!isLoggedIn) {
+      // Show login prompt dialog
+      _showLoginPromptDialog();
+    } else {
+      // User is logged in, proceed with Daily Challenge
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => QuizScreen(
+            topic: randomTopic,
+            isMockTest: false,
+          ),
+        ),
+      );
+    }
+  }
+  
+  // Show dialog prompting user to login
+  void _showLoginPromptDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        final colors = Theme.of(context).colorScheme;
+
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.lock_outline, color: colors.primary, size: 28),
+              SizedBox(width: 8),
+              Text('Login Required'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Please login to access the Daily Challenge and track your progress.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 16),
+              Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Track your learning streak', style: TextStyle(fontSize: 14)),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Save your progress', style: TextStyle(fontSize: 14)),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Compete with others', style: TextStyle(fontSize: 14)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Maybe Later'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Navigate to sign-in screen
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SignInScreen(),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text('Sign In'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  
   // Build interactive daily challenge section
   Widget _buildDailyChallengeSection(Topic randomTopic) {
     return AnimatedContainer(
@@ -376,195 +498,192 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 _isDailyChallengeExpanded = !_isDailyChallengeExpanded;
               });
             },
-            child: Container(
-              padding: EdgeInsets.all(_isDailyChallengeExpanded ? 20 : 0),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(_isDailyChallengeExpanded ? 20 : 30),
-                color: _isDailyChallengeExpanded ? Colors.white : Colors.transparent,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.indigo.withOpacity(0.4),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  // Challenge button
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(30),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF5C6BC0), Color(0xFF7E57C2)],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
+            child: Builder(
+              builder: (context) {
+                final colors = Theme.of(context).colorScheme;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+
+                return Container(
+                  padding: EdgeInsets.all(_isDailyChallengeExpanded ? 20 : 0),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(_isDailyChallengeExpanded ? 20 : 30),
+                    color: _isDailyChallengeExpanded ? colors.surface : Colors.transparent,
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.primary.withOpacity(0.4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
                       ),
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(30),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => QuizScreen(
-                                topic: randomTopic,
-                                isMockTest: false,
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      // Challenge button
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(30),
+                          gradient: LinearGradient(
+                            colors: [colors.primary, colors.secondary],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(30),
+                            onTap: () => _handleDailyChallengePress(randomTopic),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 18),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.flash_on, color: Colors.white),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Daily Challenge',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    _isDailyChallengeExpanded ? Icons.expand_less : Icons.expand_more,
+                                    color: Colors.white,
+                                  ),
+                                ],
                               ),
                             ),
-                          );
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 18),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
+                          ),
+                        ),
+                      ),
+                      
+                      // Expanded content
+                      if (_isDailyChallengeExpanded) ...[
+                        const SizedBox(height: 20),
+                        
+                        // Today's challenge info
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: colors.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.flash_on, color: Colors.white),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'Daily Challenge',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  letterSpacing: 0.5,
-                                ),
+                              Row(
+                                children: [
+                                  Icon(Icons.today, color: colors.primary, size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Today\'s Topic: ${randomTopic.title}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: colors.onSurface,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 8),
-                              Icon(
-                                _isDailyChallengeExpanded ? Icons.expand_less : Icons.expand_more,
-                                color: Colors.white,
+                              SizedBox(height: 8),
+                              Text(
+                                'Complete today\'s challenge to maintain your streak!',
+                                style: TextStyle(
+                                  color: isDark ? Colors.white70 : Colors.grey.shade700,
+                                  fontSize: 13,
+                                ),
                               ),
                             ],
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                  
-                  // Expanded content
-                  if (_isDailyChallengeExpanded) ...[
-                    const SizedBox(height: 20),
-                    
-                    // Today's challenge info
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.indigo.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.today, color: Colors.indigo, size: 20),
-                              SizedBox(width: 8),
-                              Text(
-                                'Today\'s Topic: ${randomTopic.title}',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.indigo.shade900,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Complete today\'s challenge to maintain your streak!',
-                            style: TextStyle(
-                              color: Colors.grey.shade700,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Weekly progress
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        
+                        const SizedBox(height: 16),
+                        
+                        // Weekly progress
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'This Week\'s Progress',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey.shade800,
-                                fontSize: 14,
-                              ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'This Week\'s Progress',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: colors.onSurface,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                Text(
+                                  '$_challengesCompletedThisWeek/7 days',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: colors.primary,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
                             ),
-                            Text(
-                              '$_challengesCompletedThisWeek/7 days',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.indigo,
-                                fontSize: 14,
+                            SizedBox(height: 12),
+                            
+                            // Weekly dots indicator
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: List.generate(7, (index) {
+                                final isCompleted = index < _challengesCompletedThisWeek;
+                                return Container(
+                                  width: 35,
+                                  height: 35,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isCompleted ? Colors.green : (isDark ? Colors.grey[700] : Colors.grey[300]),
+                                    boxShadow: isCompleted ? [
+                                      BoxShadow(
+                                        color: Colors.green.withOpacity(0.4),
+                                        blurRadius: 8,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ] : [],
+                                  ),
+                                  child: Center(
+                                    child: isCompleted
+                                        ? Icon(Icons.check, color: Colors.white, size: 18)
+                                        : Text(
+                                            '${index + 1}',
+                                            style: TextStyle(
+                                              color: isDark ? Colors.white70 : Colors.grey.shade600,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                  ),
+                                );
+                              }),
+                            ),
+                            
+                            SizedBox(height: 12),
+                            
+                            // Progress bar
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: LinearProgressIndicator(
+                                value: _challengesCompletedThisWeek / 7,
+                                backgroundColor: isDark ? Colors.grey[700] : Colors.grey[300],
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                                minHeight: 8,
                               ),
                             ),
                           ],
                         ),
-                        SizedBox(height: 12),
-                        
-                        // Weekly dots indicator
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: List.generate(7, (index) {
-                            final isCompleted = index < _challengesCompletedThisWeek;
-                            return Container(
-                              width: 35,
-                              height: 35,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isCompleted ? Colors.green : Colors.grey.shade300,
-                                boxShadow: isCompleted ? [
-                                  BoxShadow(
-                                    color: Colors.green.withOpacity(0.4),
-                                    blurRadius: 8,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ] : [],
-                              ),
-                              child: Center(
-                                child: isCompleted
-                                    ? Icon(Icons.check, color: Colors.white, size: 18)
-                                    : Text(
-                                        '${index + 1}',
-                                        style: TextStyle(
-                                          color: Colors.grey.shade600,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                              ),
-                            );
-                          }),
-                        ),
-                        
-                        SizedBox(height: 12),
-                        
-                        // Progress bar
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: LinearProgressIndicator(
-                            value: _challengesCompletedThisWeek / 7,
-                            backgroundColor: Colors.grey.shade300,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
-                            minHeight: 8,
-                          ),
-                        ),
                       ],
-                    ),
-                  ],
-                ],
-              ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -574,19 +693,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
+
     return Scaffold(
       body: Stack(
         children: [
           // Main content with enhanced gradient background
           Container(
-            // Enhanced gradient background (light lavender → sky blue)
-            decoration: const BoxDecoration(
+            // Enhanced gradient background (theme-aware)
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  Color(0xFFE8EAF6), // Light lavender
-                  Color(0xFFE1F5FE), // Sky blue  
-                  Color(0xFFF3E5F5), // Light purple
-                ],
+                colors: isDark
+                    ? [
+                        colors.surface,
+                        colors.surface.withOpacity(0.9),
+                        colors.surface.withOpacity(0.8),
+                      ]
+                    : [
+                        colors.primary.withOpacity(0.08),
+                        colors.secondary.withOpacity(0.08),
+                        colors.primary.withOpacity(0.05),
+                      ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -613,7 +741,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF5C6BC0).withOpacity(_logoGlowAnimation.value),
+                                      color: colors.primary.withOpacity(_logoGlowAnimation.value),
                                       blurRadius: 40 + (_logoGlowAnimation.value * 20),
                                       spreadRadius: 8 + (_logoGlowAnimation.value * 8),
                                     ),
@@ -629,8 +757,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                       height: 140,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
-                                        gradient: const LinearGradient(
-                                          colors: [Color(0xFF5C6BC0), Color(0xFF7E57C2)],
+                                        gradient: LinearGradient(
+                                          colors: [colors.primary, colors.secondary],
                                         ),
                                       ),
                                       child: const Icon(
@@ -653,12 +781,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           opacity: _welcomeFadeAnimation,
                           child: ScaleTransition(
                             scale: _welcomeScaleAnimation,
-                            child: const Text(
+                            child: Text(
                               'Welcome to LearnEase!',
                               style: TextStyle(
                                 fontSize: 32,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF1A237E),
+                                color: colors.onSurface,
                                 letterSpacing: 0.5,
                               ),
                               textAlign: TextAlign.center,
@@ -679,11 +807,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 child: child,
                               );
                             },
-                            child: const Text(
+                            child: Text(
                               'Learn Java & DBMS through\ninteractive lessons',
                               style: TextStyle(
                                 fontSize: 18,
-                                color: Colors.black87,
+                                color: isDark ? Colors.white70 : Colors.black87,
                                 height: 1.5,
                               ),
                               textAlign: TextAlign.center,

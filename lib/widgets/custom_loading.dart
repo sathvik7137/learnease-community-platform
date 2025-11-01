@@ -7,10 +7,10 @@ class TypingDotsLoader extends StatefulWidget {
   final double size;
 
   const TypingDotsLoader({
-    Key? key,
+    super.key,
     this.color = const Color(0xFF5C6BC0),
     this.size = 12.0,
-  }) : super(key: key);
+  });
 
   @override
   _TypingDotsLoaderState createState() => _TypingDotsLoaderState();
@@ -71,9 +71,9 @@ class RotatingLogoLoader extends StatefulWidget {
   final double size;
 
   const RotatingLogoLoader({
-    Key? key,
+    super.key,
     this.size = 40.0,
-  }) : super(key: key);
+  });
 
   @override
   _RotatingLogoLoaderState createState() => _RotatingLogoLoaderState();
@@ -144,10 +144,10 @@ class PulsingLoader extends StatefulWidget {
   final double size;
 
   const PulsingLoader({
-    Key? key,
+    super.key,
     this.color = const Color(0xFF5C6BC0),
     this.size = 50.0,
-  }) : super(key: key);
+  });
 
   @override
   _PulsingLoaderState createState() => _PulsingLoaderState();
@@ -214,10 +214,10 @@ class LoadingOverlay extends StatelessWidget {
   final bool showTypingDots;
 
   const LoadingOverlay({
-    Key? key,
+    super.key,
     this.message,
     this.showTypingDots = true,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

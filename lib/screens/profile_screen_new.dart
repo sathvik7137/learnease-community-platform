@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import '../data/course_content.dart';
 import '../services/local_storage.dart';
+import '../services/user_content_service.dart';
+import '../services/auth_service.dart';
 
 class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({super.key});
+
   @override
   _ProfileScreenState createState() => _ProfileScreenState();
 }
@@ -18,6 +22,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int quizzesTaken = 0;
   int averageScore = 0;
   
+  // User info
+  String username = 'Student';
+  String email = 'student@example.com';
+  bool isLoading = true;
+  
+  final AuthService _authService = AuthService();
+  
   @override
   void initState() {
     super.initState();
@@ -25,6 +36,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
   
   Future<void> _loadUserData() async {
+    setState(() {
+      isLoading = true;
+    });
+    
+    // Load username from UserContentService
+    final loadedUsername = await UserContentService.getUsername();
+    if (loadedUsername != null && loadedUsername.isNotEmpty) {
+      username = loadedUsername;
+    }
+    
+    // Try to get email from auth service (this might not be available depending on your auth implementation)
+    // For now, we'll use a default or you can extend this based on your auth system
+    
     // Calculate Java progress
     final javaTopicIds = javaTopics.map((topic) => topic.id).toList();
     final javaProgressValue = await LocalStorageService.getCourseProgress(javaTopicIds);
@@ -58,6 +82,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         quizCompletion = totalQuizzes > 0 ? completedQuizzes / totalQuizzes : 0.0;
         quizzesTaken = completedQuizzes;
         averageScore = completedQuizzes > 0 ? (totalScore / completedQuizzes).round() : 0;
+        isLoading = false;
       });
     }
   }
@@ -70,21 +95,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildProfileHeader(),
+      body: isLoading 
+        ? Center(child: CircularProgressIndicator())
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildProfileHeader(),
             const SizedBox(height: 24),
             _buildProgressSection(),
             const SizedBox(height: 24),
             _buildStatsSection(),
             SizedBox(height: 24),
             _buildRecentActivitySection(),
-          ],
-        ),
-      ),
+              ],
+            ),
+          ),
     );
   }
 
@@ -99,11 +126,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           SizedBox(height: 16),
           Text(
-            'Student',
+            username,
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           Text(
-            'student@example.com',
+            email,
             style: TextStyle(color: Colors.grey),
           ),
           SizedBox(height: 8),
@@ -244,7 +271,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (entry.key < activities.length - 1) Divider(),
                     ],
                   );
-                }).toList(),
+                }),
               ],
             ),
           ),

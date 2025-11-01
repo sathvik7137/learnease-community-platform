@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/course.dart';
 import 'quiz_screen.dart';
+import '../utils/app_theme.dart';
 
 class TopicDetailScreen extends StatefulWidget {
   final Topic topic;
 
-  const TopicDetailScreen({Key? key, required this.topic}) : super(key: key);
+  const TopicDetailScreen({super.key, required this.topic});
 
   @override
   State<TopicDetailScreen> createState() => _TopicDetailScreenState();
@@ -77,6 +78,11 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
   Widget build(BuildContext context) {
     const primaryColor = Color(0xFF5C6BC0);
     const accentColor = Color(0xFF7E57C2);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textColor = isDark ? Colors.white : Color(0xFF374151);
+    final cardBgColor = isDark ? Color(0xFF2A2A3E) : Colors.white;
+    final surfaceColor = isDark ? Color(0xFF1E1E2E) : Color(0xFFF9FAFB);
     
     return Scaffold(
       extendBodyBehindAppBar: false,
@@ -84,14 +90,14 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
         preferredSize: const Size.fromHeight(70),
         child: Container(
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [primaryColor, accentColor],
+            gradient: LinearGradient(
+              colors: [colorScheme.primary, colorScheme.secondary],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             boxShadow: [
               BoxShadow(
-                color: primaryColor.withOpacity(0.3),
+                color: colorScheme.primary.withOpacity(0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -134,15 +140,25 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
           // Background gradient
           Container(
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  const Color(0xFFF9FAFB),
-                  Colors.indigo.shade50.withOpacity(0.3),
-                  Colors.purple.shade50.withOpacity(0.2),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
+              color: isDark ? Color(0xFF1A1A2E) : Color(0xFFF9FAFB),
+              gradient: isDark 
+                ? LinearGradient(
+                    colors: [
+                      Color(0xFF1A1A2E),
+                      Color(0xFF16213E).withOpacity(0.5),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  )
+                : LinearGradient(
+                    colors: [
+                      Color(0xFFF9FAFB),
+                      Colors.indigo.shade50.withOpacity(0.3),
+                      Colors.purple.shade50.withOpacity(0.2),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
             ),
           ),
           
@@ -162,6 +178,9 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
                       Icons.description,
                       widget.topic.explanation,
                       context,
+                      cardBgColor,
+                      textColor,
+                      isDark,
                     ),
                   ),
 
@@ -172,14 +191,14 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
                     final concept = entry.value;
                     return _buildAnimatedCard(
                       index,
-                      _buildConceptCard(concept, context),
+                      _buildConceptCard(concept, context, cardBgColor, textColor, isDark),
                     );
                   }),
 
                 // Revision Points
                 _buildAnimatedCard(
                   _cardAnimations.length - 2,
-                  _buildRevisionCard(widget.topic.revisionPoints, context),
+                  _buildRevisionCard(widget.topic.revisionPoints, context, cardBgColor, textColor, isDark),
                 ),
 
                 const SizedBox(height: 16),
@@ -201,7 +220,7 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
               child: Material(
                 elevation: 8,
                 borderRadius: BorderRadius.circular(30),
-                color: primaryColor,
+                color: colorScheme.primary,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(30),
                   onTap: _scrollToTop,
@@ -238,18 +257,21 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
     );
   }
 
-  Widget _buildSectionCard(String title, IconData icon, String content, BuildContext context) {
+  Widget _buildSectionCard(String title, IconData icon, String content, BuildContext context, Color cardBgColor, Color textColor, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: Card(
-        elevation: 4,
+        elevation: isDark ? 2 : 4,
         shadowColor: const Color(0xFF5C6BC0).withOpacity(0.2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        color: cardBgColor,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             gradient: LinearGradient(
-              colors: [Colors.white, Colors.indigo.shade50.withOpacity(0.2)],
+              colors: isDark
+                ? [Color(0xFF2A2A3E), Color(0xFF3A3A52).withOpacity(0.5)]
+                : [Colors.white, Colors.indigo.shade50.withOpacity(0.2)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -284,26 +306,8 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
               const SizedBox(height: 16),
               MarkdownBody(
                 data: content,
-                styleSheet: MarkdownStyleSheet(
-                  p: const TextStyle(fontSize: 15, height: 1.6, color: Color(0xFF374151)),
-                  h1: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A237E)),
-                  h2: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFF5C6BC0)),
-                  h3: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Color(0xFF374151)),
-                  strong: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1A237E)),
-                  listBullet: const TextStyle(fontSize: 18, color: Color(0xFF5C6BC0)),
-                  code: TextStyle(
-                    backgroundColor: Colors.indigo.shade50,
-                    color: const Color(0xFF1A237E),
-                    fontFamily: 'monospace',
-                    fontSize: 14,
-                  ),
-                  codeblockDecoration: BoxDecoration(
-                    color: const Color(0xFFF3F4F6),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.indigo.shade100, width: 1.5),
-                  ),
-                  codeblockPadding: const EdgeInsets.all(16),
-                ),
+                styleSheet: _buildMarkdownStyleSheet(context, cardBgColor, textColor, isDark),
+                selectable: true,
               ),
             ],
           ),
@@ -312,18 +316,21 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
     );
   }
 
-  Widget _buildConceptCard(dynamic concept, BuildContext context) {
+  Widget _buildConceptCard(dynamic concept, BuildContext context, Color cardBgColor, Color textColor, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: Card(
-        elevation: 4,
+        elevation: isDark ? 2 : 4,
         shadowColor: const Color(0xFF7E57C2).withOpacity(0.2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        color: cardBgColor,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             gradient: LinearGradient(
-              colors: [Colors.white, Colors.purple.shade50.withOpacity(0.2)],
+              colors: isDark
+                ? [Color(0xFF2A2A3E), Color(0xFF3A3A52).withOpacity(0.5)]
+                : [Colors.white, Colors.purple.shade50.withOpacity(0.2)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -352,12 +359,7 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
               const SizedBox(height: 16),
               MarkdownBody(
                 data: concept.explanation,
-                styleSheet: MarkdownStyleSheet(
-                  p: const TextStyle(fontSize: 15, height: 1.6, color: Color(0xFF374151)),
-                  h3: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Color(0xFF374151)),
-                  strong: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1A237E)),
-                  listBullet: const TextStyle(fontSize: 18, color: Color(0xFF7E57C2)),
-                ),
+                styleSheet: _buildMarkdownStyleSheet(context, cardBgColor, textColor, isDark),
               ),
               if (concept.codeSnippet.isNotEmpty) ...[
                 const SizedBox(height: 16),
@@ -401,18 +403,21 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
     );
   }
 
-  Widget _buildRevisionCard(List<String> points, BuildContext context) {
+  Widget _buildRevisionCard(List<String> points, BuildContext context, Color cardBgColor, Color textColor, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: Card(
-        elevation: 4,
+        elevation: isDark ? 2 : 4,
         shadowColor: Colors.amber.withOpacity(0.3),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        color: cardBgColor,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             gradient: LinearGradient(
-              colors: [Colors.white, Colors.amber.shade50.withOpacity(0.3)],
+              colors: isDark
+                ? [Color(0xFF2A2A3E), Color(0xFF3A3A52).withOpacity(0.5)]
+                : [Colors.white, Colors.amber.shade50.withOpacity(0.3)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -452,9 +457,12 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
+                    color: isDark ? Color(0xFF3A3A52) : Colors.amber.shade50,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.amber.shade200, width: 1.5),
+                    border: Border.all(
+                      color: isDark ? Colors.amber.shade900 : Colors.amber.shade200,
+                      width: 1.5,
+                    ),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -481,10 +489,10 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
                       Expanded(
                         child: Text(
                           point,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 15,
                             height: 1.5,
-                            color: Color(0xFF374151),
+                            color: isDark ? Colors.white70 : Color(0xFF374151),
                           ),
                         ),
                       ),
@@ -496,6 +504,54 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
           ),
         ),
       ),
+    );
+  }
+
+  MarkdownStyleSheet _buildMarkdownStyleSheet(BuildContext context, Color cardBgColor, Color textColor, bool isDark) {
+    return MarkdownStyleSheet(
+      p: TextStyle(
+        fontSize: 15,
+        height: 1.6,
+        color: isDark ? Colors.white70 : Color(0xFF374151),
+      ),
+      h1: TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+        color: isDark ? Colors.white : Color(0xFF1A237E),
+      ),
+      h2: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        color: isDark ? Colors.white : Color(0xFF5C6BC0),
+      ),
+      h3: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
+        color: isDark ? Colors.white70 : Color(0xFF374151),
+      ),
+      strong: TextStyle(
+        fontWeight: FontWeight.bold,
+        color: isDark ? Colors.white : Color(0xFF1A237E),
+      ),
+      listBullet: TextStyle(
+        fontSize: 18,
+        color: isDark ? Colors.white : Color(0xFF5C6BC0),
+      ),
+      code: TextStyle(
+        backgroundColor: isDark ? Color(0xFF2A2A3E) : Colors.indigo.shade50,
+        color: isDark ? Color(0xFF7DD3FC) : Color(0xFF1A237E),
+        fontFamily: 'monospace',
+        fontSize: 14,
+      ),
+      codeblockDecoration: BoxDecoration(
+        color: isDark ? Color(0xFF1E1E2E) : Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? Colors.purple.shade200 : Colors.indigo.shade100,
+          width: 1.5,
+        ),
+      ),
+      codeblockPadding: const EdgeInsets.all(16),
     );
   }
 

@@ -1,0 +1,65 @@
+[
+  {
+    "title": "What is inheritance in Java?",
+    "content": "Inheritance is a mechanism where a new class inherits properties and methods from an existing class. The class that is inherited is called the parent class or superclass, and the class that inherits is called the child class or subclass.",
+    "type": "topic",
+    "category": "java"
+  },
+  {
+    "question": "Which keyword is used to inherit a class in Java?",
+    "content": "In Java, the 'extends' keyword is used to inherit from a class. For example: class Child extends Parent {}",
+    "type": "quiz",
+    "category": "java",
+    "correctAnswer": "extends"
+  },
+  {
+    "title": "Polymorphism in Java",
+    "content": "Polymorphism means 'many forms'. In Java, it is achieved through method overloading and method overriding. It allows you to write generic and reusable code.",
+    "type": "topic",
+    "category": "java"
+  },
+  {
+    "title": "Fill in the blank: Method Overriding",
+    "content": "In Java, when a subclass provides a specific implementation of a method already present in the superclass, it is called __________ (method overriding / method overloading)",
+    "type": "fill",
+    "category": "java"
+  },
+  {
+    "title": "Abstract Classes",
+    "content": "An abstract class is a class that is declared abstract. It cannot be instantiated but can be subclassed. Abstract classes are used to create blueprints for other classes.",
+    "type": "topic",
+    "category": "java"
+  },
+  {
+    "question": "Can an abstract class have a main method?",
+    "content": "Yes, an abstract class can have a main method. You can run an abstract class if it contains a main method.",
+    "type": "quiz",
+    "category": "java",
+    "correctAnswer": "Yes"
+  },
+  {
+    "title": "Introduction to SQL Joins",
+    "content": "SQL Joins are used to combine rows from two or more tables based on related columns. The main types are INNER JOIN, LEFT JOIN, RIGHT JOIN, and FULL OUTER JOIN.",
+    "type": "topic",
+    "category": "dbms"
+  },
+  {
+    "question": "Which JOIN returns rows that have matching values in both tables?",
+    "content": "INNER JOIN returns only the rows that have matching values in both the left and right tables.",
+    "type": "quiz",
+    "category": "dbms",
+    "correctAnswer": "INNER JOIN"
+  },
+  {
+    "title": "Database Normalization",
+    "content": "Normalization is the process of organizing data to reduce redundancy and improve data integrity. The main normal forms are 1NF, 2NF, 3NF, BCNF, and 4NF.",
+    "type": "topic",
+    "category": "dbms"
+  },
+  {
+    "title": "Fill in the blank: Primary Key",
+    "content": "A __________ is a column or set of columns that uniquely identifies each row in a table and cannot contain NULL values (primary key / foreign key)",
+    "type": "fill",
+    "category": "dbms"
+  }
+]

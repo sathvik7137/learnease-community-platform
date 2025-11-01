@@ -21,21 +21,21 @@ class _UsernameSetupDialogState extends State<UsernameSetupDialog> {
 
   Future<void> _saveUsername() async {
     final username = _controller.text.trim();
-    
+
     if (username.isEmpty) {
       setState(() {
         _errorMessage = 'Please enter a username';
       });
       return;
     }
-    
+
     if (username.length < 3) {
       setState(() {
         _errorMessage = 'Username must be at least 3 characters';
       });
       return;
     }
-    
+
     if (username.length > 20) {
       setState(() {
         _errorMessage = 'Username must be less than 20 characters';
@@ -48,8 +48,18 @@ class _UsernameSetupDialogState extends State<UsernameSetupDialog> {
       _errorMessage = null;
     });
 
+    // Check uniqueness with backend
+    final taken = await UserContentService.isUsernameTaken(username);
+    if (taken) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Username is already taken. Please choose another.';
+      });
+      return;
+    }
+
     await UserContentService.setUsername(username);
-    
+
     if (mounted) {
       Navigator.of(context).pop(username);
     }

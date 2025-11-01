@@ -7,10 +7,10 @@ class FillBlankExerciseScreen extends StatefulWidget {
   final List<FillBlankQuestion> questions;
 
   const FillBlankExerciseScreen({
-    Key? key,
+    super.key,
     required this.topicName,
     required this.questions,
-  }) : super(key: key);
+  });
 
   @override
   State<FillBlankExerciseScreen> createState() => _FillBlankExerciseScreenState();

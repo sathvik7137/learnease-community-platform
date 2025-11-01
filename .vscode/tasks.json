@@ -19,9 +19,12 @@
     },
     {
       "label": "Start Flutter App",
-      "type": "flutter",
-      "command": "flutter",
-      "args": ["run", "-d", "chrome"],
+      "type": "shell",
+      "command": "cmd",
+      "args": ["/c", "run_flutter.bat"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",

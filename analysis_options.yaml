@@ -1,0 +1,22 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - lib/**
+    - web/**
+    - ios/**
+    - android/**
+    - windows/**
+    - macos/**
+    - linux/**
+    - build/**
+    - "**/*.g.dart"
+  errors:
+    # Suppress third-party package warnings
+    invalid_use_of_internal_member: ignore
+
+linter:
+  rules:
+    # suppress noisy rules for now
+    avoid_print: false
+  # add other rule overrides as needed

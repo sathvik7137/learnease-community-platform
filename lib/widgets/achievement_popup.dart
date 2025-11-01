@@ -6,10 +6,10 @@ class AchievementPopup extends StatefulWidget {
   final VoidCallback? onDismiss;
 
   const AchievementPopup({
-    Key? key,
+    super.key,
     required this.achievement,
     this.onDismiss,
-  }) : super(key: key);
+  });
 
   @override
   _AchievementPopupState createState() => _AchievementPopupState();

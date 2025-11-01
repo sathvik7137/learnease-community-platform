@@ -1,17 +1,65 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'auth_service.dart';
 import '../models/user_content.dart';
 import 'dart:async';
 
 class UserContentService {
+  // Check email uniqueness via backend
+  static Future<bool> isEmailTaken(String email) async {
+    try {
+      final url = Uri.parse('$_serverUrl/api/auth/check-email?email=$email');
+      final response = await http.get(url).timeout(_timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['taken'] == true;
+      }
+    } catch (e) {
+      print('Email check failed: $e');
+    }
+  // If check fails, assume not taken to avoid false positives
+  return false;
+  }
+  // Check username uniqueness via backend
+  static Future<bool> isUsernameTaken(String username) async {
+    try {
+      final url = Uri.parse('$_serverUrl/api/auth/check-username?username=$username');
+      final response = await http.get(url).timeout(_timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['taken'] == true;
+      }
+    } catch (e) {
+      print('Username check failed: $e');
+    }
+  // If check fails, assume not taken to avoid false positives
+  return false;
+  }
+
+  // Get username suggestions when a username is taken
+  static Future<List<String>> suggestUsernames(String baseUsername) async {
+    try {
+      final url = Uri.parse('$_serverUrl/api/auth/suggest-username?base=$baseUsername');
+      final response = await http.get(url).timeout(_timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['suggestions'] is List) {
+          return List<String>.from(data['suggestions'] as List);
+        }
+      }
+    } catch (e) {
+      print('Username suggestion failed: $e');
+    }
+    return [];
+  }
   static const String _contentKey = 'user_contributions';
   static const String _usernameKey = 'user_name';
   
   // Server URL - change this to your deployed server URL
   static const String _serverUrl = String.fromEnvironment(
     'SERVER_URL',
-    defaultValue: 'https://c7a5298cf599.ngrok-free.app',
+  defaultValue: 'http://localhost:8080',
   );
   static const Duration _timeout = Duration(seconds: 10);
   
@@ -33,11 +81,10 @@ class UserContentService {
   }
   
   // Get all user contributions (from server with local fallback)
-  static Future<List<UserContent>> getAllContributions() async {
+  static Future<List<UserContent>> getAllContributions({bool forceRefresh = false}) async {
     try {
       // Try to fetch from server first
-      final url = Uri.parse('$_serverUrl/api/contributions');
-      final response = await http.get(url).timeout(_timeout);
+      final response = await AuthService().authenticatedRequest('GET', '/api/contributions');
       
       if (response.statusCode == 200 && response.body.isNotEmpty) {
         final List<dynamic> jsonList = jsonDecode(response.body) as List<dynamic>;
@@ -47,6 +94,11 @@ class UserContentService {
         
         // Cache locally for offline access
         await _cacheContributions(contributions);
+        
+        // Notify listeners of the updated list
+        if (forceRefresh) {
+          _contributionsStreamController.add(contributions);
+        }
         
         return contributions;
       }
@@ -85,6 +137,17 @@ class UserContentService {
       await prefs.setString(_contentKey, jsonEncode(jsonList));
     } catch (e) {
       print('Failed to cache contributions: $e');
+    }
+  }
+  
+  // Clear cached contributions on logout (privacy/security)
+  static Future<void> clearCachedContributions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_contentKey);
+      print('✅ Cached contributions cleared on logout');
+    } catch (e) {
+      print('Failed to clear cached contributions: $e');
     }
   }
   
@@ -151,11 +214,11 @@ class UserContentService {
     try {
       // Try to add to server
       final url = Uri.parse('$_serverUrl/api/contributions');
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(content.toJson()),
-      ).timeout(_timeout);
+  final response = await AuthService().authenticatedRequest(
+        'POST',
+        '/api/contributions',
+        body: content.toJson(),
+      );
       
       if (response.statusCode == 200) {
         // Success - refresh local cache
@@ -176,41 +239,99 @@ class UserContentService {
       return false;
     }
   }
+
+  // Batch upload multiple contributions
+  static Future<Map<String, dynamic>> batchAddContributions(List<UserContent> contents) async {
+    try {
+      // Convert all contents to JSON
+      final jsonList = contents.map((c) => c.toJson()).toList();
+      
+      // Try to upload to server in batch
+      final response = await AuthService().authenticatedRequest(
+        'POST',
+        '/api/contributions/batch',
+        body: {'items': jsonList},
+      );
+      
+      if (response.statusCode == 200) {
+        final result = jsonDecode(response.body) as Map<String, dynamic>;
+        // Success - refresh local cache
+        await getAllContributions();
+        return result;
+      } else {
+        throw Exception('Server returned ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('Batch server upload failed: $e, saving locally');
+      
+      // Fallback to local storage - save all items locally
+      try {
+        final allContributions = await _getLocalContributions();
+        allContributions.addAll(contents);
+        await _cacheContributions(allContributions);
+        return {
+          'success': true,
+          'totalCount': contents.length,
+          'successCount': contents.length,
+          'failureCount': 0,
+          'note': 'Saved locally - server sync pending',
+        };
+      } catch (e) {
+        return {
+          'success': false,
+          'totalCount': contents.length,
+          'successCount': 0,
+          'failureCount': contents.length,
+          'error': 'Failed to save: $e',
+        };
+      }
+    }
+  }
   
   // Update existing contribution (on server with local fallback)
   static Future<bool> updateContribution(String id, UserContent updatedContent) async {
     try {
       // Try to update on server
-      final url = Uri.parse('$_serverUrl/api/contributions/$id');
-      final response = await http.put(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(updatedContent.toJson()),
-      ).timeout(_timeout);
+      final response = await AuthService().authenticatedRequest(
+        'PUT',
+        '/api/contributions/$id',
+        body: updatedContent.toJson(),
+      );
       
       if (response.statusCode == 200) {
-        // Success - refresh local cache
-        await getAllContributions();
+        // Success - refresh local cache and notify listeners
+        await getAllContributions(forceRefresh: true);
         return true;
+      } else {
+        print('Server responded with status ${response.statusCode}');
+        // Try local update as fallback
+        final allContributions = await _getLocalContributions();
+        final index = allContributions.indexWhere((c) => c.id == id);
+        
+        if (index != -1) {
+          allContributions[index] = updatedContent;
+          await _cacheContributions(allContributions);
+        }
+        return false; // Still report failure so user knows server update failed
       }
     } catch (e) {
       print('Server update failed: $e, updating locally');
-    }
-    
-    // Fallback to local storage
-    try {
-      final allContributions = await _getLocalContributions();
-      final index = allContributions.indexWhere((c) => c.id == id);
-      
-      if (index == -1) {
+      // Fallback to local storage
+      try {
+        final allContributions = await _getLocalContributions();
+        final index = allContributions.indexWhere((c) => c.id == id);
+        
+        if (index == -1) {
+          return false;
+        }
+        
+        allContributions[index] = updatedContent;
+        await _cacheContributions(allContributions);
+        return false; // Report partial success
+      } catch (e) {
+        print('Local update also failed: $e');
         return false;
       }
-      
-      allContributions[index] = updatedContent;
-      await _cacheContributions(allContributions);
-      return true;
-    } catch (e) {
-      return false;
     }
   }
   
@@ -218,26 +339,32 @@ class UserContentService {
   static Future<bool> deleteContribution(String id) async {
     try {
       // Try to delete from server
-      final url = Uri.parse('$_serverUrl/api/contributions/$id');
-      final response = await http.delete(url).timeout(_timeout);
+      final response = await AuthService().authenticatedRequest('DELETE', '/api/contributions/$id');
       
       if (response.statusCode == 200) {
-        // Success - refresh local cache
-        await getAllContributions();
+        // Success - refresh local cache and notify listeners
+        await getAllContributions(forceRefresh: true);
         return true;
+      } else {
+        print('Server responded with status ${response.statusCode}');
+        // Try local deletion as fallback
+        final allContributions = await _getLocalContributions();
+        allContributions.removeWhere((c) => c.id == id);
+        await _cacheContributions(allContributions);
+        return false; // Still report failure so user knows server delete failed
       }
     } catch (e) {
       print('Server delete failed: $e, deleting locally');
-    }
-    
-    // Fallback to local storage
-    try {
-      final allContributions = await _getLocalContributions();
-      allContributions.removeWhere((c) => c.id == id);
-      await _cacheContributions(allContributions);
-      return true;
-    } catch (e) {
-      return false;
+      // Fallback to local storage
+      try {
+        final allContributions = await _getLocalContributions();
+        allContributions.removeWhere((c) => c.id == id);
+        await _cacheContributions(allContributions);
+        return false; // Report partial success
+      } catch (e) {
+        print('Local delete also failed: $e');
+        return false;
+      }
     }
   }
   

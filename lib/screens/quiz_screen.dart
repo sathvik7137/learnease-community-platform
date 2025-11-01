@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import '../models/course.dart';
 import 'result_screen.dart';
+import '../utils/app_theme.dart';
+import '../providers/theme_provider.dart';
+import 'package:provider/provider.dart';
 
 class QuizScreen extends StatefulWidget {
   final Topic topic;
   final bool isMockTest;
 
   const QuizScreen({
-    Key? key,
+    super.key,
     required this.topic,
     this.isMockTest = false,
-  }) : super(key: key);
+  });
 
   @override
   State<QuizScreen> createState() => _QuizScreenState();
@@ -121,12 +124,13 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     final question = widget.topic.quizQuestions[currentQuestionIndex];
     final progress = (currentQuestionIndex + 1) / widget.topic.quizQuestions.length;
     final answeredCount = selectedAnswers.where((a) => a != null).length;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     const primaryColor = Color(0xFF5C6BC0);
     const accentColor = Color(0xFF7E57C2);
     
     return Scaffold(
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(70),
+        preferredSize: const Size.fromHeight(100),
         child: Container(
           decoration: BoxDecoration(
             gradient: const LinearGradient(
@@ -142,86 +146,145 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
               ),
             ],
           ),
-          child: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            leading: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(24),
-                onTap: () => Navigator.pop(context),
-                child: const Icon(Icons.arrow_back, color: Colors.white),
-              ),
-            ),
-            title: Text(
-              widget.isMockTest ? 'Mock Test' : 'Quiz: ${widget.topic.title}',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            actions: [
-              // Streak indicator
-              Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                leading: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(24),
+                    onTap: () => Navigator.pop(context),
+                    child: const Icon(Icons.arrow_back, color: Colors.white),
                   ),
-                  child: Row(
-                    children: [
-                      const Text(
-                        '🎯',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '$answeredCount/${widget.topic.quizQuestions.length}',
-                        style: const TextStyle(
+                ),
+                title: Text(
+                  widget.isMockTest ? 'Mock Test' : 'Quiz & Tests',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                actions: [
+                  // Theme toggle button
+                  Consumer<ThemeProvider>(
+                    builder: (context, themeProvider, child) {
+                      return IconButton(
+                        icon: Icon(
+                          themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                          size: 28,
+                        ),
+                        onPressed: () {
+                          themeProvider.toggleTheme();
+                        },
+                        tooltip: themeProvider.isDarkMode ? 'Light Mode' : 'Dark Mode',
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  // Streak indicator
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+                      ),
+                      child: Row(
+                        children: [
+                          const Text(
+                            '🎯',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '$answeredCount/${widget.topic.quizQuestions.length}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'Quizzes',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'Mock Tests',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'Fill Blanks',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(4),
-              child: Container(
-                height: 4,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.white.withOpacity(0.3),
-                      Colors.amber.shade400,
-                      Colors.white.withOpacity(0.3),
-                    ],
-                    stops: [0.0, progress, 1.0],
-                  ),
-                ),
-              ),
-            ),
           ),
         ),
       ),
       body: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.purple.shade50.withOpacity(0.3),
-              Colors.blue.shade50.withOpacity(0.3),
-              Colors.indigo.shade50.withOpacity(0.4),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          gradient: isDark
+            ? LinearGradient(
+                colors: [
+                  Color(0xFF1A1A2E),
+                  Color(0xFF16213E).withOpacity(0.5),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              )
+            : LinearGradient(
+                colors: [
+                  Colors.purple.shade50.withOpacity(0.3),
+                  Colors.blue.shade50.withOpacity(0.3),
+                  Colors.indigo.shade50.withOpacity(0.4),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
         ),
         child: SafeArea(
           child: Padding(
@@ -273,7 +336,9 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(24),
                             gradient: LinearGradient(
-                              colors: [Colors.white, Colors.indigo.shade50.withOpacity(0.1)],
+                              colors: isDark
+                                ? [Color(0xFF2A2A3E), Color(0xFF3A3A52).withOpacity(0.5)]
+                                : [Colors.white, Colors.indigo.shade50.withOpacity(0.1)],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
@@ -285,10 +350,10 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                               // Question text
                               Text(
                                 question.question,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1A237E),
+                                  color: isDark ? Colors.white : Color(0xFF1A237E),
                                   height: 1.4,
                                 ),
                               ),
@@ -341,7 +406,9 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                                                   width: isSelected ? 2.5 : 1.5,
                                                 ),
                                                 borderRadius: BorderRadius.circular(16),
-                                                color: isSelected ? null : Colors.white,
+                                                color: isSelected
+                                                  ? null
+                                                  : isDark ? Color(0xFF2A2A3E) : Colors.white,
                                               ),
                                               child: Row(
                                                 children: [
@@ -381,7 +448,9 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                                                       style: TextStyle(
                                                         fontSize: 16,
                                                         fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                                        color: isSelected ? primaryColor : const Color(0xFF374151),
+                                                        color: isSelected
+                                                          ? primaryColor
+                                                          : isDark ? Colors.white70 : const Color(0xFF374151),
                                                         height: 1.4,
                                                       ),
                                                     ),

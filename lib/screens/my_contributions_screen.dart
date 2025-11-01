@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/user_content.dart';
 import '../services/user_content_service.dart';
+import '../services/auth_service.dart';
 import 'add_content_screen.dart';
 import 'community_contributions_screen.dart';
+import 'sign_in_screen.dart';
 
 class MyContributionsScreen extends StatefulWidget {
   const MyContributionsScreen({super.key});
@@ -15,6 +17,7 @@ class _MyContributionsScreenState extends State<MyContributionsScreen> {
   List<UserContent> _myContributions = [];
   bool _isLoading = true;
   String? _username;
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
@@ -104,6 +107,120 @@ class _MyContributionsScreenState extends State<MyContributionsScreen> {
     );
   }
 
+  // Check if user is logged in
+  Future<bool> _isUserLoggedIn() async {
+    final token = await _authService.getToken();
+    return token != null && token.isNotEmpty;
+  }
+
+  // Handle Add Content with authentication check
+  Future<void> _handleAddContentPress() async {
+    final isLoggedIn = await _isUserLoggedIn();
+    
+    if (!isLoggedIn) {
+      // Show login prompt dialog
+      _showLoginPromptDialog();
+    } else {
+      // User is logged in, proceed to Add Content
+      final result = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const AddContentScreen(),
+        ),
+      );
+      if (result == true) {
+        _loadMyContributions();
+      }
+    }
+  }
+
+  // Show dialog prompting user to login
+  void _showLoginPromptDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.lock_outline, color: Colors.blue, size: 28),
+              SizedBox(width: 8),
+              Text('Login Required'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Please login to contribute content and track your contributions.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 16),
+              Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.blue, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Share your knowledge', style: TextStyle(fontSize: 14)),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.blue, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Track your contributions', style: TextStyle(fontSize: 14)),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.blue, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Build your reputation', style: TextStyle(fontSize: 14)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Maybe Later'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Navigate to sign-in screen
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SignInScreen(),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text('Sign In'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -149,18 +266,7 @@ class _MyContributionsScreenState extends State<MyContributionsScreen> {
                       ),
                     ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final result = await Navigator.push<bool>(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const AddContentScreen(),
-            ),
-          );
-
-          if (result == true) {
-            _loadMyContributions();
-          }
-        },
+        onPressed: _handleAddContentPress,
         icon: const Icon(Icons.add),
         label: const Text('Add Content'),
       ),
@@ -231,18 +337,7 @@ class _MyContributionsScreenState extends State<MyContributionsScreen> {
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: () async {
-                final result = await Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AddContentScreen(),
-                  ),
-                );
-
-                if (result == true) {
-                  _loadMyContributions();
-                }
-              },
+              onPressed: _handleAddContentPress,
               icon: const Icon(Icons.add),
               label: const Text('Add Your First Content'),
             ),

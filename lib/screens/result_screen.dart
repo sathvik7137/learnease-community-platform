@@ -11,11 +11,11 @@ class ResultScreen extends StatefulWidget {
   final Topic topic;
 
   const ResultScreen({
-    Key? key,
+    super.key,
     required this.score,
     required this.totalQuestions,
     required this.topic,
-  }) : super(key: key);
+  });
 
   @override
   State<ResultScreen> createState() => _ResultScreenState();

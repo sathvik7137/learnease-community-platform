@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import '../main.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({Key? key}) : super(key: key);
+  const SplashScreen({super.key});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -116,20 +116,21 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       _progressController.forward();
     });
     
-    // Navigate to main app after 3 seconds with smooth transition
-    Timer(const Duration(milliseconds: 3500), () {
+    // Navigate to home page after splash
+    Timer(const Duration(milliseconds: 3500), () async {
+      // Always navigate to MainNavigation (home page) first
+      // Login/signup is accessible from Profile section
+      const Widget nextPage = MainNavigation();
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => MainNavigation(),
+          pageBuilder: (context, animation, secondaryAnimation) => nextPage,
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             const begin = Offset(0.0, 0.3);
             const end = Offset.zero;
             const curve = Curves.easeOutCubic;
-            
             var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
             var offsetAnimation = animation.drive(tween);
             var fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(animation);
-            
             return SlideTransition(
               position: offsetAnimation,
               child: FadeTransition(

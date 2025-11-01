@@ -1,8 +1,19 @@
 import 'package:flutter/material.dart';
 import '../data/course_content.dart';
 import '../services/local_storage.dart';
+import '../services/auth_service.dart';
+import '../services/user_content_service.dart';
+import '../utils/app_theme.dart';
+import '../providers/theme_provider.dart';
+import 'sign_in_screen.dart';
+import 'sign_up_screen.dart';
+import 'edit_profile_screen.dart';
+import '../widgets/theme_toggle_widget.dart';
+import 'package:provider/provider.dart';
 
 class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({super.key});
+
   @override
   _ProfileScreenState createState() => _ProfileScreenState();
 }
@@ -19,6 +30,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   int averageScore = 0;
   int learningStreak = 0;
   
+  // Auth state
+  bool _isLoggedIn = false;
+  String _userEmail = 'student@example.com';
+  String _username = 'Student';
+  
   // Animation controller for background
   late AnimationController _backgroundController;
   late Animation<double> _backgroundAnimation;
@@ -27,6 +43,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   void initState() {
     super.initState();
     _loadUserData();
+    _checkAuthStatus();
     
     // Setup background animation
     _backgroundController = AnimationController(
@@ -36,6 +53,42 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     
     _backgroundAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_backgroundController);
     _backgroundController.repeat(reverse: true);
+  }
+
+  Future<void> _checkAuthStatus() async {
+    final token = await AuthService().getToken();
+    if (mounted) {
+      setState(() {
+        _isLoggedIn = token != null && token.isNotEmpty;
+      });
+      
+      // If logged in, fetch user profile
+      if (_isLoggedIn) {
+        await _fetchUserProfile();
+      }
+    }
+  }
+  
+  Future<void> _fetchUserProfile() async {
+    try {
+      final profile = await AuthService().getUserProfile();
+      if (profile.containsKey('error')) {
+        print('Error fetching profile: ${profile['error']}');
+        return;
+      }
+      
+      if (mounted) {
+        setState(() {
+          _userEmail = profile['email'] ?? 'student@example.com';
+          _username = profile['username'] ?? 'Student';
+          if (_username.isEmpty) {
+            _username = 'Student';
+          }
+        });
+      }
+    } catch (e) {
+      print('Error fetching user profile: $e');
+    }
   }
   
   @override
@@ -91,221 +144,123 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      appBar: AppBar(
-        elevation: 4,
-        shadowColor: Colors.indigo.withOpacity(0.5),
-        flexibleSpace: Container(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(100),
+        child: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF5C6BC0), Color(0xFF3F51B5)],
+              colors: [Color(0xFF5C6BC0), Color(0xFF7E57C2)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-          ),
-        ),
-        title: const Text(
-          'Profile & Progress',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
-            color: Colors.white,
-          ),
-        ),
-      ),
-      body: AnimatedBuilder(
-        animation: _backgroundController,
-        builder: (context, child) {
-          return Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.indigo.shade50,
-                  Colors.blue.shade50.withOpacity(0.3 + _backgroundAnimation.value * 0.3),
-                  Colors.purple.shade50.withOpacity(0.3 + _backgroundAnimation.value * 0.3),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                stops: [0.0, 0.5 + _backgroundAnimation.value * 0.2, 1.0],
+            boxShadow: [
+              BoxShadow(
+                color: Color(0xFF5C6BC0),
+                blurRadius: 12,
+                offset: Offset(0, 4),
               ),
-            ),
-            child: child,
-          );
-        },
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
+            ],
+          ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildProfileHeader(),
-              const SizedBox(height: 24),
-              _buildProgressSection(),
-              const SizedBox(height: 24),
-              _buildStatsSection(),
-              SizedBox(height: 24),
-              _buildSettingsSection(),
-              SizedBox(height: 24),
-              _buildRecentActivitySection(),
-              SizedBox(height: 100), // Extra space for floating nav
+              AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                title: const Text(
+                  'Profile & Progress',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                actions: [
+                  Consumer<ThemeProvider>(
+                    builder: (context, themeProvider, child) {
+                      return IconButton(
+                        icon: Icon(
+                          themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                        onPressed: () {
+                          themeProvider.toggleTheme();
+                        },
+                        tooltip: themeProvider.isDarkMode ? 'Light Mode' : 'Dark Mode',
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'Overview',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'Progress',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'Achievements',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildProfileHeader() {
-    return Center(
-      child: Column(
-        children: [
-          // Profile picture with glowing border
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.indigo.withOpacity(0.6),
-                  blurRadius: 20,
-                  spreadRadius: 5,
-                ),
-              ],
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFF5C6BC0),
-                  Color(0xFF7E57C2),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            padding: EdgeInsets.all(5),
-            child: CircleAvatar(
-              radius: 55,
-              backgroundColor: Colors.white,
-              child: CircleAvatar(
-                radius: 50,
-                backgroundColor: Colors.indigo.shade100,
-                child: Icon(Icons.person, size: 70, color: Colors.indigo),
-              ),
-            ),
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Student',
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1A237E),
-            ),
-          ),
-          Text(
-            'student@example.com',
-            style: TextStyle(
-              color: Colors.grey.shade600,
-              fontSize: 14,
-            ),
-          ),
-          SizedBox(height: 16),
-          
-          // Learning streak badge
-          if (learningStreak > 0)
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.orange.shade400, Colors.deepOrange.shade400],
-                ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.orange.withOpacity(0.4),
-                    blurRadius: 10,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.local_fire_department, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    '$learningStreak Day Streak!',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          
-          SizedBox(height: 12),
-          
-          // Total quiz score badge
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.indigo.shade50,
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: Colors.indigo.shade200),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.star, color: Colors.amber, size: 18),
-                SizedBox(width: 6),
-                Text(
-                  'Average Score: $averageScore%',
-                  style: TextStyle(
-                    color: Colors.indigo.shade900,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProgressSection() {
-    return Card(
-      elevation: 8,
-      shadowColor: Colors.indigo.withOpacity(0.3),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
+      body: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: [Colors.white, Colors.indigo.shade50.withOpacity(0.3)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          color: isDark ? Colors.grey.shade900 : Colors.grey.shade50,
         ),
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Overall Progress',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A237E),
-                ),
-              ),
-              SizedBox(height: 20),
-              _buildProgressItem('Java Programming', javaProgress, '${(javaProgress * 100).round()}%', Colors.orange),
-              SizedBox(height: 16),
-              _buildProgressItem('Database Management', dbmsProgress, '${(dbmsProgress * 100).round()}%', Colors.blue),
-              SizedBox(height: 16),
-              _buildProgressItem('Quizzes Completed', quizCompletion, '${(quizCompletion * 100).round()}%', Colors.green),
+              _buildProfileCard(isDark),
+              const SizedBox(height: 28),
+              _buildProgressSection(isDark),
+              const SizedBox(height: 28),
+              _buildSettingsSection(isDark),
+              const SizedBox(height: 100), // Extra space for floating nav
             ],
           ),
         ),
@@ -313,7 +268,202 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildProgressItem(String title, double progress, String percentage, Color color) {
+  Widget _buildProfileCard(bool isDark) {
+    final cardColor = isDark ? const Color(0xFF1E1E30) : Colors.white;  // Dark blue-grey instead of grey
+    final borderColor = isDark ? const Color(0xFF3A3A4E) : Colors.grey.shade200;  // Lighter border for visibility
+    final textColor = isDark ? Colors.white : const Color(0xFF1A237E);
+    final subtextColor = isDark ? Colors.grey.shade200 : const Color(0xFF546E7A);  // Lighter grey for subtext
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.45 : 0.12),
+            blurRadius: isDark ? 28 : 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          children: [
+            // Avatar with gradient border
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFF5C6BC0),
+                    Color(0xFF7E57C2),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              padding: const EdgeInsets.all(3),
+              child: CircleAvatar(
+                radius: 50,
+                backgroundColor: cardColor,
+                child: CircleAvatar(
+                  radius: 47,
+                  backgroundColor: isDark ? const Color(0xFF2A2A3E) : Colors.grey.shade100,
+                  child: Icon(
+                    Icons.person,
+                    size: 54,
+                    color: const Color(0xFF5C6BC0),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Username
+            Text(
+              _username,
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: textColor,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 6),
+            
+            // Email
+            Text(
+              _userEmail,
+              style: TextStyle(
+                fontSize: 14,
+                color: subtextColor,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Stats Grid
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF2A2A3E) : Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildStatColumn(isDark, topicsCompleted.toString(), 'Topics'),
+                  Container(
+                    height: 40,
+                    width: 1,
+                    color: isDark ? const Color(0xFF3A3A4E) : Colors.grey.shade300,
+                  ),
+                  _buildStatColumn(isDark, quizzesTaken.toString(), 'Quizzes'),
+                  Container(
+                    height: 40,
+                    width: 1,
+                    color: isDark ? const Color(0xFF3A3A4E) : Colors.grey.shade300,
+                  ),
+                  _buildStatColumn(isDark, '$averageScore%', 'Score'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildStatColumn(bool isDark, String value, String label) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: const Color(0xFF5C6BC0),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProgressSection(bool isDark) {
+    final cardColor = isDark ? const Color(0xFF1E1E30) : Colors.white;  // Dark blue-grey
+    final borderColor = isDark ? const Color(0xFF3A3A4E) : Colors.grey.shade200;
+    final textColor = isDark ? Colors.white : const Color(0xFF1A237E);
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.45 : 0.12),
+            blurRadius: isDark ? 28 : 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Section Title
+            Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF5C6BC0),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Learning Progress',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            
+            // Progress items
+            _buildProgressRow('Java Programming', javaProgress, Colors.orange, isDark),
+            const SizedBox(height: 20),
+            _buildProgressRow('Database Management', dbmsProgress, Colors.blue, isDark),
+            const SizedBox(height: 20),
+            _buildProgressRow('Quizzes Completed', quizCompletion, Colors.green, isDark),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildProgressRow(String title, double progress, Color color, bool isDark) {
+    final textColor = isDark ? Colors.white : const Color(0xFF424242);
+    final bgColor = isDark ? const Color(0xFF2A2A3E) : Colors.grey.shade200;  // Darker background
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -324,156 +474,263 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               title,
               style: TextStyle(
                 fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87,
+                fontWeight: FontWeight.w600,
+                color: textColor,
               ),
             ),
-            Text(
-              percentage,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: color,
-                fontSize: 15,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '${(progress * 100).round()}%',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                  fontSize: 12,
+                ),
               ),
             ),
           ],
         ),
-        SizedBox(height: 10),
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.3),
-                blurRadius: 4,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: Colors.grey[200],
-              valueColor: AlwaysStoppedAnimation<Color>(color),
-              minHeight: 12,
-            ),
+        const SizedBox(height: 10),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: LinearProgressIndicator(
+            value: progress,
+            backgroundColor: bgColor,
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+            minHeight: 10,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildStatsSection() {
-    return Card(
-      elevation: 8,
-      shadowColor: Colors.purple.withOpacity(0.3),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: [Colors.white, Colors.purple.shade50.withOpacity(0.3)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+  Widget _buildSettingsSection(bool isDark) {
+    final cardColor = isDark ? const Color(0xFF1E1E30) : Colors.white;  // Dark blue-grey
+    final borderColor = isDark ? const Color(0xFF3A3A4E) : Colors.grey.shade200;
+    final textColor = isDark ? Colors.white : const Color(0xFF1A237E);
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.45 : 0.12),
+            blurRadius: isDark ? 28 : 16,
+            offset: const Offset(0, 8),
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Your Stats',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A237E),
-                ),
-              ),
-              SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStatItem(topicsCompleted.toString(), 'Topics Completed', Icons.topic, Colors.blue),
-                  _buildStatItem(quizzesTaken.toString(), 'Quizzes Taken', Icons.quiz, Colors.purple),
-                  _buildStatItem('$averageScore%', 'Avg. Score', Icons.stars, Colors.amber),
-                ],
-              ),
-            ],
-          ),
-        ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildStatItem(String value, String label, IconData icon, Color color) {
-    return Column(
-      children: [
-        Container(
-          padding: EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.3),
-                blurRadius: 8,
-                offset: Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Icon(icon, color: color, size: 28),
-        ),
-        SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSettingsSection() {
-    return Card(
-      elevation: 8,
-      shadowColor: Colors.amber.withOpacity(0.3),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: [Colors.white, Colors.amber.shade50.withOpacity(0.3)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Settings',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A237E),
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Section Title
+            Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF5C6BC0),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                Text(
+                  'Account',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+              
+              // Sign in / Signup / Logout buttons
+              if (!_isLoggedIn)
+                Column(
+                  children: [
+                    Text(
+                      'Not logged in yet?',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: textColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => SignInScreen(),
+                                ),
+                              );
+                            },
+                            icon: Icon(Icons.login),
+                            label: Text('Sign In'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color(0xFF5C6BC0),
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const SignUpScreen(),
+                                ),
+                              );
+                            },
+                            icon: Icon(Icons.person_add),
+                            label: Text('Sign Up'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color(0xFF7E57C2),
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                )
+              else
+                Column(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.green.shade900 : Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isDark ? Colors.green.shade700 : Colors.green.shade300,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.check_circle,
+                            color: isDark ? Colors.green.shade400 : Colors.green,
+                            size: 20,
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'You are logged in',
+                              style: TextStyle(
+                                color: isDark ? Colors.green.shade300 : Colors.green.shade700,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    
+                    // Edit Profile button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(0xFF5C6BC0),
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () async {
+                          final result = await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => EditProfileScreen(
+                                currentUsername: _username,
+                                email: _userEmail,
+                              ),
+                            ),
+                          );
+                          // If profile was updated, refresh it
+                          if (result == true) {
+                            await _fetchUserProfile();
+                          }
+                        },
+                        icon: Icon(Icons.edit),
+                        label: Text('Edit Profile'),
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () async {
+                          final res = await AuthService().revokeToken();
+                          if (res.containsKey('success') && res['success'] == true) {
+                            // Clear cached contributions on logout (privacy & security)
+                            await UserContentService.clearCachedContributions();
+                            
+                            if (mounted) {
+                              setState(() {
+                                _isLoggedIn = false;
+                                _userEmail = 'student@example.com';
+                                _username = 'Student';
+                              });
+                            }
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Logged out successfully'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          } else {
+                            final err = res['error'] ?? 'Logout failed';
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(err.toString()),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        },
+                        icon: Icon(Icons.logout),
+                        label: Text('Logout'),
+                      ),
+                    ),
+                  ],
+                ),
+
               SizedBox(height: 16),
               
               // Settings coming soon message
@@ -502,11 +759,17 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
-  Widget _buildRecentActivitySection() {
+  Widget _buildRecentActivitySection(bool isDark) {
+    final cardColor = isDark ? const Color(0xFF1E1E30) : Colors.white;  // Dark blue-grey
+    final textColor = isDark ? Colors.white : Color(0xFF1A237E);
+    final dividerColor = isDark ? const Color(0xFF3A3A4E) : Colors.grey.shade300;  // Better visibility
+    final gradientColors = isDark 
+      ? [const Color(0xFF1E1E30), const Color(0xFF2A2A3E)]  // Dark blue-grey gradient
+      : [Colors.white, Colors.blue.shade50.withOpacity(0.3)];
+    
     return FutureBuilder(
       future: _getRecentActivities(),
       builder: (context, AsyncSnapshot<List<Map<String, dynamic>>> snapshot) {
@@ -516,13 +779,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         
         return Card(
           elevation: 8,
-          shadowColor: Colors.blue.withOpacity(0.3),
+          shadowColor: isDark ? Colors.black.withOpacity(0.3) : Colors.blue.withOpacity(0.3),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               gradient: LinearGradient(
-                colors: [Colors.white, Colors.blue.shade50.withOpacity(0.3)],
+                colors: gradientColors,
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -537,7 +800,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A237E),
+                      color: textColor,
                     ),
                   ),
                   SizedBox(height: 16),
@@ -549,13 +812,14 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           activity['title'], 
                           activity['time'], 
                           activity['icon'], 
-                          activity['color']
+                          activity['color'],
+                          isDark
                         ),
                         if (entry.key < activities.length - 1) 
-                          Divider(color: Colors.grey.shade300),
+                          Divider(color: dividerColor),
                       ],
                     );
-                  }).toList(),
+                  }),
                 ],
               ),
             ),
@@ -633,7 +897,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     return options[DateTime.now().millisecondsSinceEpoch % options.length];
   }
 
-  Widget _buildActivityItem(String title, String time, IconData icon, Color color) {
+  Widget _buildActivityItem(String title, String time, IconData icon, Color color, bool isDark) {
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
+    
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10.0),
       child: Row(
@@ -656,7 +923,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: Colors.black87,
+                    color: textColor,
                   ),
                 ),
                 if (time.isNotEmpty)
@@ -664,7 +931,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     time,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey.shade600,
+                      color: subtextColor,
                     ),
                   ),
               ],

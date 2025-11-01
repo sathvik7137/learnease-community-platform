@@ -44,19 +44,24 @@ class UserContent {
   
   // Create from JSON
   factory UserContent.fromJson(Map<String, dynamic> json) {
+    // Handle both MongoDB's _id and client-side id
+    final idValue = json['_id'] ?? json['id'];
+    final idString = idValue is Map ? idValue['\$oid'] : idValue?.toString();
+    
     return UserContent(
-      id: json['id'] as String,
-      authorName: json['authorName'] as String,
+      id: idString ?? 'unknown',
+      authorName: json['authorName'] as String? ?? json['authorUsername'] as String? ?? 'Unknown',
       type: ContentType.values.firstWhere(
         (e) => e.toString().split('.').last == json['type'],
+        orElse: () => ContentType.topic,
       ),
       category: CourseCategory.values.firstWhere(
         (e) => e.toString().split('.').last == (json['category'] ?? 'java'),
         orElse: () => CourseCategory.java,
       ),
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
-      content: Map<String, dynamic>.from(json['content'] as Map),
+      createdAt: DateTime.parse(json['createdAt'] as String? ?? json['serverCreatedAt'] as String? ?? DateTime.now().toIso8601String()),
+      updatedAt: DateTime.parse(json['updatedAt'] as String? ?? json['serverCreatedAt'] as String? ?? DateTime.now().toIso8601String()),
+      content: Map<String, dynamic>.from(json['content'] as Map? ?? json),
     );
   }
   
