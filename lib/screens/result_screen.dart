@@ -198,12 +198,6 @@ class _ResultScreenState extends State<ResultScreen> with TickerProviderStateMix
           ),
         ],
       ),
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
       body: Stack(
         children: [
           // Gradient Background
