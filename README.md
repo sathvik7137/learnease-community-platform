@@ -404,6 +404,105 @@ CREATE TABLE sessions (
 
 ---
 
+## ⚡ Performance Optimizations
+
+LearnEase includes comprehensive performance optimizations for smooth animations, fast scrolling, and responsive navigation.
+
+### Animation Performance
+- **Fast animations**: 150ms durations for instant feedback
+- **Optimized curves**: `fastLinearToSlowEaseIn` and `easeOutBack` curves
+- **Minimal overdraw**: Reduced shadow elevations (2-4 instead of 6-8)
+- **Hardware acceleration**: Proper use of `AnimatedContainer` and `ScaleTransition`
+
+### Scrolling Performance
+- **Bouncing physics**: `BouncingScrollPhysics` with `AlwaysScrollableScrollPhysics`
+- **Cache extent**: 500px viewport cache for smooth infinite scrolling
+- **Clip behavior**: `Clip.antiAlias` for cards
+- **Auto keep alive**: Prevents widget disposal during scroll
+
+### Responsive UI
+- **Instant button feedback**: Scale animations (80ms) with visual feedback
+- **Fast page transitions**: 200ms slide transitions
+- **Optimized ListViews**: Custom `OptimizedListView` with keepAlive support
+- **Smart state management**: Reduced unnecessary rebuilds
+
+### Usage
+
+#### Fast Response Buttons
+```dart
+import 'package:flutter/material.dart';
+import 'utils/fast_response_widgets.dart';
+
+// Instant visual feedback buttons
+FastResponseButton(
+  onPressed: () { /* your action */ },
+  backgroundColor: Colors.blue,
+  child: const Text('Press Me'),
+)
+
+FastIconButton(
+  onPressed: () { /* your action */ },
+  icon: Icons.favorite,
+  color: Colors.red,
+)
+```
+
+#### Optimized Scrolling
+```dart
+import 'widgets/optimized_scroll_widgets.dart';
+
+// Smooth scrolling ListView
+OptimizedListView.builder(
+  itemCount: 100,
+  itemBuilder: (context, index) => ListTile(title: Text('Item $index')),
+)
+
+// Smooth SingleChildScrollView
+OptimizedSingleChildScrollView(
+  child: Column(children: [...]),
+)
+```
+
+#### Performance Configuration
+```dart
+import 'utils/performance_config.dart';
+
+// Access global performance settings
+PerformanceConfig.fastAnimation       // 150ms
+PerformanceConfig.normalAnimation     // 300ms
+PerformanceConfig.pageTransition      // 200ms
+PerformanceConfig.buttonFeedback      // 80ms
+PerformanceConfig.defaultScrollPhysics // BouncingScrollPhysics
+```
+
+### Optimization Techniques Applied
+
+1. **Reduced shadow elevations**: 2-4 instead of 6-8 for better rendering performance
+2. **Fast animation durations**: 80-300ms for snappy feel without lag
+3. **Smooth scroll physics**: Bouncing physics with high responsiveness
+4. **Proper widget tree**: Reduced nesting and expensive computations
+5. **Clip optimization**: `Clip.antiAlias` for smooth corners without performance hit
+6. **TextStyle height**: Consistent line height (1.2-1.5) for proper rendering
+
+### Page Route Optimization
+```dart
+import 'utils/performance_config.dart';
+
+// Fast page transitions
+Navigator.push(
+  context,
+  OptimizedPageRoute(builder: (ctx) => NextScreen()),
+);
+
+// Or use fade transition
+Navigator.push(
+  context,
+  OptimizedFadeRoute(builder: (ctx) => NextScreen()),
+);
+```
+
+---
+
 ## 👥 Contributors
 
 | Name | Role | GitHub |

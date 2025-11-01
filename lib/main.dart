@@ -59,6 +59,9 @@ class LearnEaseApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           showPerformanceOverlay: false,
           debugShowMaterialGrid: false,
+          // Performance optimizations
+          useInheritedMediaQuery: true,
+          scrollBehavior: const ScrollBehavior().copyWith(scrollbars: true),
           // Disable widget inspector on web to prevent DevTools errors
           builder: (context, child) {
             // On web, return child without widget inspector
@@ -88,13 +91,15 @@ class _MainNavigationState extends State<MainNavigation> {
   ];
 
   void _onItemTapped(int index) {
-    // Play sound and haptic feedback
-    SoundService.selectionHaptic();
-    SoundService.playTapSound();
-    
-    setState(() {
-      _selectedIndex = index;
-    });
+    // Fast response - update immediately without animation delays
+    if (_selectedIndex != index) {
+      setState(() {
+        _selectedIndex = index;
+      });
+      // Play sound and haptic feedback after state update
+      SoundService.selectionHaptic();
+      SoundService.playTapSound();
+    }
   }
 
   @override
@@ -190,8 +195,8 @@ class _MainNavigationState extends State<MainNavigation> {
     return GestureDetector(
       onTap: () => _onItemTapped(index),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutBack,
+        duration: const Duration(milliseconds: 150), // Faster animation
+        curve: Curves.fastLinearToSlowEaseIn,
         padding: EdgeInsets.symmetric(
           horizontal: isSelected ? 16 : 12,
           vertical: 10,
@@ -211,8 +216,8 @@ class _MainNavigationState extends State<MainNavigation> {
           mainAxisSize: MainAxisSize.min,
           children: [
             AnimatedScale(
-              scale: isSelected ? 1.2 : 1.0,
-              duration: const Duration(milliseconds: 300),
+              scale: isSelected ? 1.15 : 1.0,
+              duration: const Duration(milliseconds: 120), // Faster scale
               curve: Curves.easeOutBack,
               child: Icon(
                 isSelected ? activeIcon : icon,
@@ -224,7 +229,7 @@ class _MainNavigationState extends State<MainNavigation> {
             ),
             const SizedBox(height: 4),
             AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 300),
+              duration: const Duration(milliseconds: 120), // Faster text animation
               style: TextStyle(
                 fontSize: isSelected ? 12 : 11,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
