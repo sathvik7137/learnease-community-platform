@@ -19,35 +19,6 @@
     },
     {
       "label": "Start Flutter App",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-Command",
-        "flutter run -d chrome --web-port 7777 2>&1 | Where-Object { $_ -notmatch 'file_picker' -and $_ -notmatch 'Ask the maintainers' -and $_ -notmatch 'default_package' -and $_ -notmatch 'pluginClass' } | Select-String -NotMatch '^$|^Package' -AllMatches | Where-Object {$_.Matches.Count -gt 0}"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated"
-      }
-    },
-    {
-      "label": "Start LearnEase App",
-      "dependsOn": ["Start Community Server"],
-      "dependsOrder": "sequence",
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always"
-      },
-      "runOptions": {
-        "runOn": "default"
-      }
-    },
-    {
-      "label": "Flutter: Clean Run (No Warnings)",
       "type": "flutter",
       "command": "flutter",
       "args": [
@@ -60,7 +31,20 @@
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
-        "panel": "dedicated"
+        "panel": "dedicated",
+        "focus": true
+      }
+    },
+    {
+      "label": "Start LearnEase App",
+      "dependsOn": ["Start Community Server"],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always"
+      },
+      "runOptions": {
+        "runOn": "default"
       }
     }
   ]
