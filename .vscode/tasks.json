@@ -20,8 +20,11 @@
     {
       "label": "Start Flutter App",
       "type": "shell",
-      "command": "cmd",
-      "args": ["/c", "run_flutter.bat"],
+      "command": "powershell",
+      "args": [
+        "-Command",
+        "flutter run -d chrome --web-port 7777 2>&1 | Where-Object { $_ -notmatch 'file_picker' -and $_ -notmatch 'Ask the maintainers' -and $_ -notmatch 'default_package' -and $_ -notmatch 'pluginClass' } | Select-String -NotMatch '^$|^Package' -AllMatches | Where-Object {$_.Matches.Count -gt 0}"
+      ],
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -41,6 +44,23 @@
       },
       "runOptions": {
         "runOn": "default"
+      }
+    },
+    {
+      "label": "Flutter: Clean Run (No Warnings)",
+      "type": "flutter",
+      "command": "flutter",
+      "args": [
+        "run",
+        "-d",
+        "chrome",
+        "--web-port",
+        "7777"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
       }
     }
   ]
