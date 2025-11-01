@@ -1,8 +1,0 @@
-# Flutter configuration for development
-# This file configures default settings for flutter run
-
-# Note: Flutter CLI doesn't support port configuration via config file
-# Use one of these methods instead:
-# 1. VS Code Task: "Start Flutter App" (recommended - port 7777 is built-in)
-# 2. Command line: flutter run -d chrome --web-port 7777
-# 3. Launch config: F5 to use launch.json settings (port 7777)

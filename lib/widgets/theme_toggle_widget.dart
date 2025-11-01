@@ -14,18 +14,6 @@ class ThemeToggleWidget extends StatelessWidget {
         return GestureDetector(
           onTap: () {
             themeProvider.toggleTheme();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  isDark ? 'Switched to Light Mode' : 'Switched to Dark Mode',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                backgroundColor: isDark ? Colors.orange : Colors.blue,
-                duration: const Duration(milliseconds: 1500),
-                behavior: SnackBarBehavior.floating,
-                margin: const EdgeInsets.all(16),
-              ),
-            );
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 400),
