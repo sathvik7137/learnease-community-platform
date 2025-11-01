@@ -27,21 +27,22 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
     
+    // Fast animation - reduced from 1500ms to 300ms for snappy UI
     _fadeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 300),
     );
     
-    // Setup staggered animations for cards
+    // Setup fast staggered animations for cards
     final sectionCount = 3 + (widget.topic.conceptSections?.length ?? 0) + 1;
     for (int i = 0; i < sectionCount; i++) {
-      final start = i * 0.1;
-      final end = start + 0.5;
+      final start = (i * 0.05).clamp(0.0, 1.0);
+      final end = (start + 0.3).clamp(0.0, 1.0);
       _cardAnimations.add(
         Tween<double>(begin: 0.0, end: 1.0).animate(
           CurvedAnimation(
             parent: _fadeController,
-            curve: Interval(start.clamp(0.0, 1.0), end.clamp(0.0, 1.0), curve: Curves.easeOut),
+            curve: Interval(start, end, curve: Curves.fastLinearToSlowEaseIn),
           ),
         ),
       );
@@ -513,37 +514,47 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
     return MarkdownStyleSheet(
       p: TextStyle(
         fontSize: 15,
-        height: 1.6,
+        height: 1.5,
         color: isDark ? Colors.white70 : Color(0xFF374151),
+        fontFamily: 'sans-serif', // Explicit font for better Unicode support
       ),
       h1: TextStyle(
         fontSize: 22,
         fontWeight: FontWeight.bold,
         color: isDark ? Colors.white : Color(0xFF1A237E),
+        fontFamily: 'sans-serif',
+        height: 1.4,
       ),
       h2: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.w600,
         color: isDark ? Colors.white : Color(0xFF5C6BC0),
+        fontFamily: 'sans-serif',
+        height: 1.4,
       ),
       h3: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w500,
         color: isDark ? Colors.white70 : Color(0xFF374151),
+        fontFamily: 'sans-serif',
+        height: 1.3,
       ),
       strong: TextStyle(
         fontWeight: FontWeight.bold,
         color: isDark ? Colors.white : Color(0xFF1A237E),
+        fontFamily: 'sans-serif',
       ),
       listBullet: TextStyle(
         fontSize: 18,
         color: isDark ? Colors.white : Color(0xFF5C6BC0),
+        fontFamily: 'sans-serif',
       ),
       code: TextStyle(
         backgroundColor: isDark ? Color(0xFF2A2A3E) : Colors.indigo.shade50,
         color: isDark ? Color(0xFF7DD3FC) : Color(0xFF1A237E),
         fontFamily: 'monospace',
-        fontSize: 14,
+        fontSize: 13,
+        height: 1.4,
       ),
       codeblockDecoration: BoxDecoration(
         color: isDark ? Color(0xFF1E1E2E) : Color(0xFFF3F4F6),
@@ -554,6 +565,15 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
         ),
       ),
       codeblockPadding: const EdgeInsets.all(16),
+      blockquote: TextStyle(
+        color: isDark ? Colors.white54 : Color(0xFF6B7280),
+        fontFamily: 'sans-serif',
+        height: 1.5,
+      ),
+      em: TextStyle(
+        fontStyle: FontStyle.italic,
+        fontFamily: 'sans-serif',
+      ),
     );
   }
 
