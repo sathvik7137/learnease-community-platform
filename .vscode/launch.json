@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "LearnEase (Chrome)",
+      "name": "LearnEase (Chrome) - Port 7777",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
@@ -10,7 +10,7 @@
       "preLaunchTask": "Start Community Server"
     },
     {
-      "name": "LearnEase (Chrome - Server Already Running)",
+      "name": "LearnEase (Chrome - Server Running) - Port 7777",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",

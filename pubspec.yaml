@@ -69,6 +69,12 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # Web configuration - Fixed port for development
+  web:
+    plugins:
+      url_strategy:
+        - lib/router/router.dart
+
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/images/

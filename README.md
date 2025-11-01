@@ -50,27 +50,37 @@ cd community_server && dart pub get && cd ..
 
 ### Running the Application
 
-**Option 1: Using VS Code Tasks (Recommended)**
+**Option 1: Using VS Code Tasks (Recommended - Fixed Port 7777)**
 1. Press `Ctrl+Shift+P`
 2. Run "Tasks: Run Task"
-3. Select "Start Community Server" then "Start Flutter App"
+3. Select "Start Flutter App" (automatically uses port 7777)
 
-**Option 2: Manual Commands**
+**Option 2: Using Debug Launcher (Fixed Port 7777)**
+1. Press `F5` to start debugging
+2. Select "LearnEase (Chrome) - Port 7777"
+3. Server and app launch automatically with fixed ports
 
+**Option 3: Manual Commands (Custom Port)**
 ```bash
-# Terminal 1: Start Backend Server
+# Terminal 1: Start Backend Server (Fixed Port 8080)
 cd community_server
 dart run bin/server.dart
 # Server runs on: http://localhost:8080
 
-# Terminal 2: Start Flutter App  
+# Terminal 2: Start Flutter App (Fixed Port 7777)
 flutter run -d chrome --web-port 7777
 # App runs on: http://localhost:7777
 ```
 
-**Option 3: Using Batch Script**
+### 🔧 Port Configuration
+
+**Ports are FIXED and require no configuration:**
+- **Backend**: `http://localhost:8080` (configured in `community_server/bin/server.dart`)
+- **Frontend**: `http://localhost:7777` (configured in `.vscode/launch.json` and `.vscode/tasks.json`)
+
+To run with different ports, use:
 ```bash
-./run_flutter.bat
+flutter run -d chrome --web-port YOUR_PORT
 ```
 
 ---

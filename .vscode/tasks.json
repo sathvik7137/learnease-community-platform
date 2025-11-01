@@ -33,6 +33,9 @@
         "reveal": "always",
         "panel": "dedicated",
         "focus": true
+      },
+      "runOptions": {
+        "instanceLimit": 1
       }
     },
     {
