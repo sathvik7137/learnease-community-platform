@@ -507,10 +507,12 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.grey[200],
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[800]
+                      : Colors.grey[200],
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Text(
+                child: Text(
                   '''[
   {
     "title": "Topic Name",
@@ -522,7 +524,13 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
     "correctAnswer": 0
   }
 ]''',
-                  style: TextStyle(fontFamily: 'monospace', fontSize: 11),
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[200]
+                        : Colors.black,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -534,14 +542,22 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.grey[200],
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[800]
+                      : Colors.grey[200],
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Text(
+                child: Text(
                   '''{"title": "Topic 1", "content": "..."}
 {"title": "Topic 2", "content": "..."}
 {"question": "Q1?", "options": [...]}''',
-                  style: TextStyle(fontFamily: 'monospace', fontSize: 11),
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[200]
+                        : Colors.black,
+                  ),
                 ),
               ),
             ],
