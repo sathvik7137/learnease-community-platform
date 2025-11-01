@@ -4,6 +4,9 @@ import '../models/course.dart';
 import '../services/local_storage.dart';
 import '../data/fill_blanks_data.dart';
 import 'fill_blank_exercise_screen.dart';
+import '../widgets/theme_toggle_widget.dart';
+import 'package:provider/provider.dart';
+import '../providers/theme_provider.dart';
 
 class ResultScreen extends StatefulWidget {
   final int score;
@@ -177,6 +180,24 @@ class _ResultScreenState extends State<ResultScreen> with TickerProviderStateMix
           'Quiz Results',
           style: TextStyle(
             fontSize: 22,
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: [
+          Consumer<ThemeProvider>(
+            builder: (context, themeProvider, _) {
+              return IconButton(
+                icon: Icon(
+                  themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+                  color: Colors.white,
+                ),
+                onPressed: themeProvider.toggleTheme,
+              );
+            },
+          ),
+        ],
+      ),
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),

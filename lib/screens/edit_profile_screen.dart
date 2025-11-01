@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/user_content_service.dart';
+import '../widgets/theme_toggle_widget.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final String currentUsername;
@@ -176,6 +177,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             color: Colors.white,
           ),
         ),
+        actions: const [ThemeToggleWidget()],
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(false),

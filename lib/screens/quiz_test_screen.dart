@@ -9,6 +9,7 @@ import '../utils/app_theme.dart';
 import 'quiz_screen.dart';
 import 'fill_blanks_screen.dart';
 import 'community_contributions_screen.dart';
+import '../widgets/theme_toggle_widget.dart';
 import 'sign_in_screen.dart';
 
 class QuizTestScreen extends StatefulWidget {
@@ -242,6 +243,7 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
           title: const Text('Quiz & Tests'),
           backgroundColor: colors.primary,
           foregroundColor: Colors.white,
+          actions: const [ThemeToggleWidget()],
           bottom: const TabBar(
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,

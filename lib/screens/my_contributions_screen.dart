@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import 'add_content_screen.dart';
 import 'community_contributions_screen.dart';
 import 'sign_in_screen.dart';
+import '../widgets/theme_toggle_widget.dart';
 
 class MyContributionsScreen extends StatefulWidget {
   const MyContributionsScreen({super.key});
@@ -243,6 +244,7 @@ class _MyContributionsScreenState extends State<MyContributionsScreen> {
                 ),
               ),
             ),
+          const ThemeToggleWidget(),
         ],
       ),
       body: _isLoading

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/user_content_service.dart';
 import '../widgets/username_setup_dialog.dart';
+import '../widgets/theme_toggle_widget.dart';
 import 'otp_verify_screen.dart';
 import 'sign_in_screen.dart';
 
@@ -138,6 +139,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               onPressed: _goBackToCredentials,
             )
           : null,
+        actions: const [ThemeToggleWidget()],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),

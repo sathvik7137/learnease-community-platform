@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/fill_blank.dart';
 import '../services/local_storage.dart';
+import '../widgets/theme_toggle_widget.dart';
 
 class FillBlankExerciseScreen extends StatefulWidget {
   final String topicName;
@@ -299,6 +300,7 @@ class _FillBlankExerciseScreenState extends State<FillBlankExerciseScreen> with 
                   ),
                 ),
               ),
+              const ThemeToggleWidget(),
             ],
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(4),

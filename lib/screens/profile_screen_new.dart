@@ -3,6 +3,7 @@ import '../data/course_content.dart';
 import '../services/local_storage.dart';
 import '../services/user_content_service.dart';
 import '../services/auth_service.dart';
+import '../widgets/theme_toggle_widget.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -94,6 +95,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Profile & Progress'),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
+        actions: const [ThemeToggleWidget()],
       ),
       body: isLoading 
         ? Center(child: CircularProgressIndicator())

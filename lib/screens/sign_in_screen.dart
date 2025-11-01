@@ -4,6 +4,7 @@ import '../services/user_content_service.dart';
 import '../main.dart';
 import 'forgot_password_screen.dart';
 import 'sign_up_screen.dart';
+import '../widgets/theme_toggle_widget.dart';
 
 class SignInScreen extends StatefulWidget {
   final String? initialEmail;
@@ -150,6 +151,7 @@ class _SignInScreenState extends State<SignInScreen> {
               onPressed: _goBackToCredentials,
             )
           : null,
+        actions: const [ThemeToggleWidget()],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),

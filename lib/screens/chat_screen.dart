@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/ai_service.dart';
+import '../widgets/theme_toggle_widget.dart';
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
 
@@ -110,7 +111,10 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('AI Assistant')),
+      appBar: AppBar(
+        title: const Text('AI Assistant'),
+        actions: const [ThemeToggleWidget()],
+      ),
       body: Column(
         children: [
           Expanded(

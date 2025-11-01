@@ -6,6 +6,7 @@ import '../utils/app_theme.dart';
 import 'course_detail_screen.dart';
 import 'sign_in_screen.dart';
 import '../services/auth_service.dart';
+import '../widgets/theme_toggle_widget.dart';
 
 class CoursesScreen extends StatefulWidget {
   const CoursesScreen({super.key});
@@ -92,6 +93,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
               color: Colors.white,
             ),
           ),
+          const ThemeToggleWidget(),
         ],
       ),
       body: Container(

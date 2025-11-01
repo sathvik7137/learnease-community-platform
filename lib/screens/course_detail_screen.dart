@@ -5,6 +5,7 @@ import 'topic_detail_screen.dart';
 import '../services/auth_service.dart';
 import 'sign_in_screen.dart';
 import '../utils/app_theme.dart';
+import '../widgets/theme_toggle_widget.dart';
 
 class CourseDetailScreen extends StatefulWidget {
   final Course course;
@@ -117,6 +118,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
             color: Colors.white,
           ),
         ),
+        actions: const [ThemeToggleWidget()],
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Container(

@@ -4,6 +4,7 @@ import 'result_screen.dart';
 import '../utils/app_theme.dart';
 import '../providers/theme_provider.dart';
 import 'package:provider/provider.dart';
+import '../widgets/theme_toggle_widget.dart';
 
 class QuizScreen extends StatefulWidget {
   final Topic topic;

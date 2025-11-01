@@ -8,6 +8,7 @@ import 'add_content_screen.dart';
 import 'my_contributions_screen.dart';
 import 'sign_in_screen.dart';
 import 'dart:async';
+import '../widgets/theme_toggle_widget.dart';
 
 class CommunityContributionsScreen extends StatefulWidget {
   const CommunityContributionsScreen({super.key});
@@ -298,6 +299,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
                   )),
                 ],
               ),
+              const ThemeToggleWidget(),
             ],
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(48),

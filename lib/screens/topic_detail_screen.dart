@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/course.dart';
 import 'quiz_screen.dart';
 import '../utils/app_theme.dart';
+import '../widgets/theme_toggle_widget.dart';
 
 class TopicDetailScreen extends StatefulWidget {
   final Topic topic;
@@ -123,6 +124,7 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> with TickerProvid
                 letterSpacing: 0.5,
               ),
             ),
+            actions: const [ThemeToggleWidget()],
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(4),
               child: LinearProgressIndicator(

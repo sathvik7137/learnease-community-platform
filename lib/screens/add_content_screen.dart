@@ -4,6 +4,7 @@ import '../models/user_content.dart';
 import '../services/user_content_service.dart';
 import '../widgets/username_setup_dialog.dart';
 import 'bulk_import_screen.dart';
+import '../widgets/theme_toggle_widget.dart';
 
 class AddContentScreen extends StatefulWidget {
   final UserContent? existingContent; // For editing
@@ -216,6 +217,7 @@ class _AddContentScreenState extends State<AddContentScreen> {
             onPressed: () => _showHelpDialog(),
             tooltip: 'Help',
           ),
+          const ThemeToggleWidget(),
         ],
       ),
       body: _username == null

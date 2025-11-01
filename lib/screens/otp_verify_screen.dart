@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../widgets/theme_toggle_widget.dart';
 
 class OtpVerifyScreen extends StatefulWidget {
   final String phone;
@@ -35,7 +36,10 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Verify OTP')),
+      appBar: AppBar(
+        title: const Text('Verify OTP'),
+        actions: const [ThemeToggleWidget()],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(

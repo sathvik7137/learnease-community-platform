@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import '../models/user_content.dart';
 import '../services/user_content_service.dart';
 import '../widgets/username_setup_dialog.dart';
+import '../widgets/theme_toggle_widget.dart';
 
 class BulkImportScreen extends StatefulWidget {
   const BulkImportScreen({super.key});
@@ -247,6 +248,7 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
       appBar: AppBar(
         title: const Text('Bulk Import Content'),
         actions: [
+          const ThemeToggleWidget(),
           IconButton(
             icon: const Icon(Icons.help_outline),
             onPressed: _showHelpDialog,
