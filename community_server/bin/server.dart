@@ -63,11 +63,13 @@ final List<Map<String, dynamic>> sessionsCache = [];
 
 void _initDb() {
   try {
-    // Use absolute path to ensure database persists in the same location
-    final dbPath = 'users.db';
+    // Use absolute path to ensure database persists in the community_server directory
+    // Get the directory where this script is running from
+    final scriptDir = File(Platform.script.toFilePath()).parent.parent.path;
+    final dbPath = '$scriptDir${Platform.pathSeparator}users.db';
     db = sqlite3.open(dbPath);
     
-    print('📂 Database path: ${Directory.current.path}${Platform.pathSeparator}$dbPath');
+    print('📂 Database path: $dbPath');
     
     // Create tables if they don't exist
     db.execute('''
