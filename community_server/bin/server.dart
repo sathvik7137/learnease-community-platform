@@ -63,7 +63,11 @@ final List<Map<String, dynamic>> sessionsCache = [];
 
 void _initDb() {
   try {
-    db = sqlite3.open('users.db');
+    // Use absolute path to ensure database persists in the same location
+    final dbPath = 'users.db';
+    db = sqlite3.open(dbPath);
+    
+    print('📂 Database path: ${Directory.current.path}${Platform.pathSeparator}$dbPath');
     
     // Create tables if they don't exist
     db.execute('''
@@ -73,7 +77,8 @@ void _initDb() {
         password_hash TEXT,
         phone TEXT UNIQUE,
         google_id TEXT,
-        created_at TEXT
+        created_at TEXT,
+        username TEXT
       );
       CREATE TABLE IF NOT EXISTS otps (
         phone TEXT PRIMARY KEY,
@@ -89,6 +94,13 @@ void _initDb() {
         expires_at TEXT,
         revoked INTEGER DEFAULT 0
       );
+      CREATE TABLE IF NOT EXISTS email_otps (
+        email TEXT PRIMARY KEY,
+        code TEXT,
+        expires_at TEXT,
+        attempts INTEGER,
+        created_at TEXT
+      );
     ''');
     
     // Add username column if it doesn't exist (migration)
@@ -102,7 +114,15 @@ void _initDb() {
       }
     }
     
+    // Verify tables were created
+    final tables = db.select("SELECT name FROM sqlite_master WHERE type='table';");
+    print('✅ Database tables: ${tables.map((t) => t['name']).join(', ')}');
     print('✅ users.db opened and tables ensured');
+    
+    // Log existing users on startup
+    final existingUsers = db.select('SELECT COUNT(*) as count FROM users;');
+    print('📊 Existing users in database: ${existingUsers.first['count']}');
+    
     dbAvailable = true;
   } catch (e) {
     // If native sqlite3 DLL is missing (common on some Windows setups), fall back to in-memory users cache
@@ -318,15 +338,39 @@ void _dbDeleteOtp(String phone) {
 
 // Email OTP helpers
 void _dbSaveEmailOtp(String email, String code, String expiresAt, int attempts) {
-  emailOtps[email] = {'code': code, 'expiresAt': expiresAt, 'attempts': attempts};
+  if (!dbAvailable) {
+    emailOtps[email] = {'code': code, 'expiresAt': expiresAt, 'attempts': attempts};
+    return;
+  }
+  final stmt = db.prepare('INSERT OR REPLACE INTO email_otps (email, code, expires_at, attempts, created_at) VALUES (?, ?, ?, ?, ?);');
+  try {
+    stmt.execute([email, code, expiresAt, attempts, DateTime.now().toIso8601String()]);
+    print('💾 Email OTP saved to database: $email');
+  } finally {
+    stmt.dispose();
+  }
 }
 
 Map<String, dynamic>? _dbGetEmailOtp(String email) {
-  return emailOtps[email];
+  if (!dbAvailable) return emailOtps[email];
+  final rs = db.select('SELECT email, code, expires_at, attempts FROM email_otps WHERE email = ?;', [email]);
+  if (rs.isEmpty) return null;
+  final r = rs.first;
+  return {'email': r['email'], 'code': r['code'], 'expiresAt': r['expires_at'], 'attempts': r['attempts']};
 }
 
 void _dbDeleteEmailOtp(String email) {
-  emailOtps.remove(email);
+  if (!dbAvailable) {
+    emailOtps.remove(email);
+    return;
+  }
+  final stmt = db.prepare('DELETE FROM email_otps WHERE email = ?;');
+  try {
+    stmt.execute([email]);
+    print('🗑️ Email OTP deleted from database: $email');
+  } finally {
+    stmt.dispose();
+  }
 }
 
 // Send email via SMTP (Gmail)
@@ -774,9 +818,9 @@ void main(List<String> args) async {
       if (user == null) {
         // Return error for non-existent email for login attempts
         print('[LOGIN OTP] ❌ Email not registered: $email');
-        print('[LOGIN OTP] ❌ All users in DB:');
+        print('[LOGIN OTP] ❌ Checking all registered emails in database:');
         try {
-          final allUsers = db.select('SELECT email FROM users;');
+          final allUsers = db.select('SELECT LOWER(email) as email FROM users;');
           for (final row in allUsers) {
             print('[LOGIN OTP]   • ${row['email']}');
           }
