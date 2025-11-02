@@ -536,50 +536,73 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
                           const SizedBox(height: 12),
                           // Scrollable list of items with checkboxes
                           Container(
-                            constraints: const BoxConstraints(maxHeight: 250),
+                            constraints: const BoxConstraints(maxHeight: 300),
                             decoration: BoxDecoration(
                               border: Border.all(color: Colors.green.withOpacity(0.5)),
                               borderRadius: BorderRadius.circular(6),
+                              color: Colors.grey.withOpacity(0.05),
                             ),
-                            child: ListView.builder(
+                            child: ListView.separated(
+                              physics: const ScrollPhysics(),
                               shrinkWrap: true,
                               itemCount: _parsedItems.length,
+                              separatorBuilder: (context, index) => Divider(
+                                height: 1,
+                                color: Colors.green.withOpacity(0.2),
+                              ),
                               itemBuilder: (context, index) {
                                 final item = _parsedItems[index];
                                 final isSelected = _selectedIndices.contains(index);
                                 final itemTitle = item['title'] ?? item['question'] ?? item['statement'] ?? 'Item ${index + 1}';
                                 
-                                return Container(
-                                  decoration: BoxDecoration(
-                                    color: isSelected ? Colors.green.withOpacity(0.15) : null,
-                                    border: Border(
-                                      bottom: BorderSide(
-                                        color: Colors.green.withOpacity(0.2),
-                                      ),
-                                    ),
-                                  ),
-                                  child: CheckboxListTile(
-                                    value: isSelected,
-                                    onChanged: (value) {
+                                return Material(
+                                  color: isSelected ? Colors.green.withOpacity(0.2) : Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () {
                                       _toggleSelection(index);
                                     },
-                                    title: Text(
-                                      itemTitle.toString().length > 60
-                                          ? '${itemTitle.toString().substring(0, 60)}...'
-                                          : itemTitle.toString(),
-                                      style: const TextStyle(fontSize: 12),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      'Item ${index + 1}',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.grey[500],
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                      child: Row(
+                                        children: [
+                                          Checkbox(
+                                            value: isSelected,
+                                            onChanged: (value) {
+                                              _toggleSelection(index);
+                                            },
+                                          ),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  itemTitle.toString().length > 60
+                                                      ? '${itemTitle.toString().substring(0, 60)}...'
+                                                      : itemTitle.toString(),
+                                                  style: const TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                Padding(
+                                                  padding: const EdgeInsets.only(top: 4.0),
+                                                  child: Text(
+                                                    'Item ${index + 1}',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.grey[500],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                                    dense: true,
                                   ),
                                 );
                               },
