@@ -350,30 +350,43 @@ Future<bool> _sendEmail(String to, String subject, String body) async {
     final smtpUser = Platform.environment['SMTP_USER'] ?? _readLocalEnvTop('SMTP_USER');
     final smtpPass = Platform.environment['SMTP_PASSWORD'] ?? _readLocalEnvTop('SMTP_PASSWORD');
     print('[EMAIL] SMTP_USER: ' + (smtpUser ?? 'null'));
-    print('[EMAIL] SMTP_PASSWORD: ' + (smtpPass != null ? '***hidden***' : 'null'));
+    print('[EMAIL] SMTP_PASSWORD: ' + (smtpPass != null ? '${smtpPass.length} chars (with spaces)' : 'null'));
+    
     if (smtpUser == null || smtpPass == null) {
       print('⚠️ Email not configured (SMTP_USER or SMTP_PASSWORD missing). OTP: Check console.');
       return false;
     }
+    
+    // Log credentials format for debugging
+    print('[EMAIL] SMTP User email format: ${smtpUser.contains("@") ? "Valid" : "Invalid"}');
+    print('[EMAIL] SMTP Password format: ${smtpPass.length} characters');
+    
     final smtpServer = gmail(smtpUser, smtpPass);
     final message = Message()
       ..from = Address(smtpUser, 'LearnEase')
       ..recipients.add(to)
       ..subject = subject
       ..html = body;
+    
+    print('[EMAIL] Message prepared, sending...');
     try {
-      await send(message, smtpServer);
+      await send(message, smtpServer).timeout(const Duration(seconds: 15));
       print('✅ Email sent successfully to $to');
       return true;
+    } on TimeoutException catch (e) {
+      print('❌ Email send TIMEOUT: ${e.toString()}');
+      return false;
     } on MailerException catch (e) {
       print('❌ Email send failed: ${e.toString()}');
+      print('[EMAIL] Problem count: ${e.problems.length}');
       for (var p in e.problems) {
         print('   Problem: ${p.code}: ${p.msg}');
       }
       return false;
     }
-  } catch (e) {
+  } catch (e, stackTrace) {
     print('❌ Email configuration error: $e');
+    print('[EMAIL] Stack trace: $stackTrace');
     return false;
   }
 }
@@ -773,11 +786,20 @@ void main(List<String> args) async {
       final body_text = 'Your LearnEase login OTP is: $code\nValid for 5 minutes.';
       final sent = await _sendEmail(email, subject, body_text);
       print('[LOGIN OTP] 📧 Email send result: ' + (sent ? 'SUCCESS ✅' : 'FAILURE ❌'));
-      return Response.ok(jsonEncode({'sent': sent}), headers: {'Content-Type': 'application/json'});
+      
+      if (sent) {
+        return Response.ok(jsonEncode({'sent': true, 'message': 'OTP sent successfully'}), headers: {'Content-Type': 'application/json'});
+      } else {
+        // Email failed, but OTP is saved - return error so client knows to check console
+        return Response.internalServerError(
+          body: jsonEncode({'sent': false, 'error': 'Email send failed. Check server logs.'}),
+          headers: {'Content-Type': 'application/json'}
+        );
+      }
     } catch (e) {
       print('[LOGIN OTP] ❌ Exception: $e');
       print('[LOGIN OTP] Stack trace: ${StackTrace.current}');
-      return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
+      return Response.internalServerError(body: jsonEncode({'error': e.toString(), 'sent': false}), headers: {'Content-Type': 'application/json'});
     }
   });
 
@@ -806,10 +828,18 @@ void main(List<String> args) async {
       final body_text = 'Your LearnEase signup OTP is: $code\nValid for 5 minutes.';
       final sent = await _sendEmail(email, subject, body_text);
       print('[SIGNUP OTP] Email send result: ' + (sent ? 'SUCCESS' : 'FAILURE'));
-      return Response.ok(jsonEncode({'sent': sent}), headers: {'Content-Type': 'application/json'});
+      
+      if (sent) {
+        return Response.ok(jsonEncode({'sent': true, 'message': 'OTP sent successfully'}), headers: {'Content-Type': 'application/json'});
+      } else {
+        return Response.internalServerError(
+          body: jsonEncode({'sent': false, 'error': 'Email send failed. Check server logs.'}),
+          headers: {'Content-Type': 'application/json'}
+        );
+      }
     } catch (e) {
       print('[SIGNUP OTP] Exception: $e');
-      return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
+      return Response.internalServerError(body: jsonEncode({'error': e.toString(), 'sent': false}), headers: {'Content-Type': 'application/json'});
     }
   });
 
@@ -1690,10 +1720,18 @@ void main(List<String> args) async {
       final body_text = 'Your LearnEase password reset OTP is: $code\nValid for 5 minutes.';
       final sent = await _sendEmail(email, subject, body_text);
       print('[RESET OTP] Email send result: ' + (sent ? 'SUCCESS' : 'FAILURE'));
-      return Response.ok(jsonEncode({'sent': sent}), headers: {'Content-Type': 'application/json'});
+      
+      if (sent) {
+        return Response.ok(jsonEncode({'sent': true, 'message': 'OTP sent successfully'}), headers: {'Content-Type': 'application/json'});
+      } else {
+        return Response.internalServerError(
+          body: jsonEncode({'sent': false, 'error': 'Email send failed. Check server logs.'}),
+          headers: {'Content-Type': 'application/json'}
+        );
+      }
     } catch (e) {
       print('[RESET OTP] Exception: $e');
-      return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
+      return Response.internalServerError(body: jsonEncode({'error': e.toString(), 'sent': false}), headers: {'Content-Type': 'application/json'});
     }
   });
 
