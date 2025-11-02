@@ -410,20 +410,39 @@ void main(List<String> args) async {
   try {
     // Try to read MongoDB URI from environment or .env
     // Note: mongo_dart requires standard mongodb:// format, not mongodb+srv://
-    final mongoUri = Platform.environment['MONGODB_URI'] ?? _readLocalEnvTop('MONGODB_URI') ?? 
+    String mongoUri = Platform.environment['MONGODB_URI'] ?? _readLocalEnvTop('MONGODB_URI') ?? 
       'mongodb://rayapureddyvardhan2004:C8vV3P2suExvwC5g@cluster0-shard-00-00.sufzx.mongodb.net:27017,cluster0-shard-00-01.sufzx.mongodb.net:27017,cluster0-shard-00-02.sufzx.mongodb.net:27017/learnease?ssl=true&replicaSet=Cluster0-shard-0&authSource=admin';
+    
+    // If using mongodb+srv:// URI, convert to standard mongodb:// format
+    if (mongoUri.contains('mongodb+srv://')) {
+      print('[MONGO] Converting mongodb+srv:// URI to standard format...');
+      // Extract components from mongodb+srv URI
+      final srvPattern = RegExp(r'mongodb\+srv://([^:]+):([^@]+)@([^/]+)/(.*)');
+      final match = srvPattern.firstMatch(mongoUri);
+      if (match != null) {
+        final username = match.group(1);
+        final password = match.group(2);
+        final dbAndParams = match.group(4);
+        
+        // Convert to standard format with multiple hosts
+        mongoUri = 'mongodb://$username:$password@cluster0-shard-00-00.sufzx.mongodb.net:27017,cluster0-shard-00-01.sufzx.mongodb.net:27017,cluster0-shard-00-02.sufzx.mongodb.net:27017/$dbAndParams?ssl=true&replicaSet=Cluster0-shard-0&authSource=admin';
+        print('[MONGO] Converted URI for compatibility');
+      }
+    }
     
     print('[MONGO] Attempting to connect to MongoDB...');
     print('[MONGO] URI: ${mongoUri.replaceAll(RegExp(r':[^@]*@'), ':****@')}');
     
     final tmpDb = Db(mongoUri);
-    await tmpDb.open().timeout(const Duration(seconds: 10));
+    print('[MONGO] Opening connection...');
+    await tmpDb.open().timeout(const Duration(seconds: 15));
     // only assign to globals after open succeeds
     mongoDb = tmpDb;
     contribCollection = mongoDb.collection('contributions');
     print('✅ MongoDB connected successfully');
-  } catch (e) {
+  } catch (e, stackTrace) {
     print('⚠️ MongoDB connection failed: $e');
+    print('[MONGO] Stack trace: $stackTrace');
     print('⚠️ Contributions feature will be unavailable. Using local cache instead...');
     // Create a dummy local Db instance that won't be opened; use a local in-memory fallback collection wrapper
     try {
