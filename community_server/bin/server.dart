@@ -409,9 +409,9 @@ void main(List<String> args) async {
   // Connect to MongoDB (safe init: only assign globals after successful open)
   try {
     // Try to read MongoDB URI from environment or .env
-    // Note: mongo_dart requires standard mongodb:// format, not mongodb+srv://
+    // Default to local MongoDB on localhost:27017
     String mongoUri = Platform.environment['MONGODB_URI'] ?? _readLocalEnvTop('MONGODB_URI') ?? 
-      'mongodb://rayapureddyvardhan2004:C8vV3P2suExvwC5g@cluster0-shard-00-00.sufzx.mongodb.net:27017,cluster0-shard-00-01.sufzx.mongodb.net:27017,cluster0-shard-00-02.sufzx.mongodb.net:27017/learnease?ssl=true&replicaSet=Cluster0-shard-0&authSource=admin';
+      'mongodb://localhost:27017/learnease';
     
     // If using mongodb+srv:// URI, convert to standard mongodb:// format
     if (mongoUri.contains('mongodb+srv://')) {
