@@ -769,14 +769,25 @@ void main(List<String> args) async {
       print('[LOGIN OTP] Final email (normalized): "$email"');
       
       // Check if user exists before sending OTP (security fix)
+      print('[LOGIN OTP] 🔍 Looking up user with email: "$email"');
       final user = _dbGetUserByEmail(email);
       if (user == null) {
         // Return error for non-existent email for login attempts
         print('[LOGIN OTP] ❌ Email not registered: $email');
+        print('[LOGIN OTP] ❌ All users in DB:');
+        try {
+          final allUsers = db.select('SELECT email FROM users;');
+          for (final row in allUsers) {
+            print('[LOGIN OTP]   • ${row['email']}');
+          }
+        } catch (e) {
+          print('[LOGIN OTP]   Error listing users: $e');
+        }
         return Response(401, body: jsonEncode({'error': 'Email not registered. Please sign up first.', 'sent': false}), headers: {'Content-Type': 'application/json'});
       }
       
       print('[LOGIN OTP] ✅ User found: email=${user['email']}, hasPassword=${user['passwordHash'] != null && (user['passwordHash'] as String).isNotEmpty}');
+      print('[LOGIN OTP] 🔑 Password to verify: "$password" (length=${password?.length ?? 0})');
       
       // Validate password if provided (for login flow)
       if (password != null && password.isNotEmpty) {
@@ -790,11 +801,14 @@ void main(List<String> args) async {
         
         // Verify password
         print('[LOGIN OTP] Testing BCrypt...');
+        print('[LOGIN OTP] 🔐 Stored Hash: ${storedHash.substring(0, 30)}...');
+        print('[LOGIN OTP] 🔑 Plain Password: "$password"');
         bool pwdValid = false;
         try {
           pwdValid = BCrypt.checkpw(password, storedHash);
         } catch (bcryptErr) {
           print('[LOGIN OTP] ❌ BCrypt error: $bcryptErr');
+          print('[LOGIN OTP] ❌ BCrypt Stack: ${bcryptErr.runtimeType}');
           return Response(401, body: jsonEncode({'error': 'Password verification failed. Please try again.', 'sent': false}), headers: {'Content-Type': 'application/json'});
         }
         
@@ -870,6 +884,14 @@ void main(List<String> args) async {
         return Response(400, body: jsonEncode({'error': 'Missing or invalid fields'}), headers: {'Content-Type': 'application/json'});
       }
       final record = _dbGetEmailOtp(email);
+      print('[RESET OTP] 🔍 Looking up OTP for "$email"');
+      print('[RESET OTP] OTP record found: ${record != null ? '✅ YES' : '❌ NO'}');
+      if (record != null) {
+        print('[RESET OTP] 📋 Stored Code: ${record['code']}, Provided: $code');
+      } else {
+        print('[RESET OTP] ❌ NO OTP FOUND for email: "$email"');
+        print('[RESET OTP] 🗂️ Available emails in emailOtps: ${emailOtps.keys.toList()}');
+      }
       if (record == null) return Response(400, body: jsonEncode({'error': 'No OTP requested'}), headers: {'Content-Type': 'application/json'});
       final expires = DateTime.parse(record['expiresAt'] as String);
       if (DateTime.now().isAfter(expires)) {
@@ -974,10 +996,16 @@ void main(List<String> args) async {
         return Response(400, body: jsonEncode({'error': 'OTP expired'}), headers: {'Content-Type': 'application/json'});
       }
       
-      if (record['code'] != code) {
-        print('[EMAIL OTP] ❌ OTP code mismatch');
+      final storedCode = record['code'] as String;
+      print('[EMAIL OTP] 🔍 Code Comparison:');
+      print('[EMAIL OTP]   Stored Type: ${storedCode.runtimeType}, Value: "$storedCode" (length=${storedCode.length})');
+      print('[EMAIL OTP]   Provided Type: ${code.runtimeType}, Value: "$code" (length=${code.length})');
+      print('[EMAIL OTP]   Match: ${storedCode == code}');
+      
+      if (storedCode != code) {
+        print('[EMAIL OTP] ❌ OTP code mismatch: "$storedCode" != "$code"');
         final attempts = (record['attempts'] as int? ?? 0) + 1;
-        _dbSaveEmailOtp(email, record['code'] as String, record['expiresAt'] as String, attempts);
+        _dbSaveEmailOtp(email, storedCode, record['expiresAt'] as String, attempts);
         return Response(401, body: jsonEncode({'error': 'Invalid OTP code'}), headers: {'Content-Type': 'application/json'});
       }
       
@@ -1606,7 +1634,9 @@ void main(List<String> args) async {
   router.post('/api/auth/send-reset-otp', (Request request) async {
     try {
       final body = await request.readAsString();
-      print('[RESET OTP] Received send-reset-otp request: ' + body);
+      final logMsg = '[RESET OTP] Received send-reset-otp request: ' + body;
+      print(logMsg);
+      File('reset_otp_debug.log').writeAsStringSync(logMsg + '\n', mode: FileMode.append);
       final data = jsonDecode(body) as Map<String, dynamic>;
       final email = (data['email'] as String?)?.trim().toLowerCase();
       if (email == null || !email.contains('@')) return Response(400, body: jsonEncode({'error': 'Invalid email'}), headers: {'Content-Type': 'application/json'});
@@ -1614,13 +1644,14 @@ void main(List<String> args) async {
       final user = _dbGetUserByEmail(email);
       if (user == null) {
         // Return clear error for password reset when email not found
-        print('[RESET OTP] ❌ Email not registered: $email - not sending OTP');
+        File('reset_otp_debug.log').writeAsStringSync('[RESET OTP] Email not registered: $email\n', mode: FileMode.append);
         return Response(404, body: jsonEncode({'sent': false, 'error': 'No account found with this email address. Please check your email or create a new account.'}), headers: {'Content-Type': 'application/json'});
       }
       
       final code = (100000 + (DateTime.now().millisecondsSinceEpoch % 899999)).toString();
       final expires = DateTime.now().add(const Duration(minutes: 5));
       _dbSaveEmailOtp(email, code, expires.toIso8601String(), 0);
+      File('reset_otp_debug.log').writeAsStringSync('[RESET OTP] OTP Saved: email=$email, code=$code\n', mode: FileMode.append);
       print('[RESET OTP] Email OTP saved for $email: $code (expires ${expires.toIso8601String()})');
       final subject = 'LearnEase Password Reset OTP';
       final body_text = 'Your LearnEase password reset OTP is: $code\nValid for 5 minutes.';
