@@ -23,6 +23,7 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
   String? _successMessage;
   String? _username;
   List<Map<String, dynamic>> _parsedItems = [];
+  Set<int> _selectedIndices = {}; // Track selected items for deletion
   int _uploadedCount = 0;
 
   @override
@@ -253,6 +254,70 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
     }
   }
 
+  void _toggleSelection(int index) {
+    setState(() {
+      if (_selectedIndices.contains(index)) {
+        _selectedIndices.remove(index);
+      } else {
+        _selectedIndices.add(index);
+      }
+    });
+  }
+
+  void _selectAll() {
+    setState(() {
+      _selectedIndices = Set.from(List.generate(_parsedItems.length, (i) => i));
+    });
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selectedIndices.clear();
+    });
+  }
+
+  void _deleteSelected() {
+    if (_selectedIndices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No items selected for deletion')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Selected Items'),
+        content: Text('Delete ${_selectedIndices.length} item(s)? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                // Sort indices in descending order to remove from end first
+                final sortedIndices = _selectedIndices.toList()..sort((a, b) => b.compareTo(a));
+                for (final index in sortedIndices) {
+                  if (index < _parsedItems.length) {
+                    _parsedItems.removeAt(index);
+                  }
+                }
+                _selectedIndices.clear();
+              });
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Deleted ${_selectedIndices.length} item(s)')),
+              );
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _fileContentController.dispose();
@@ -414,8 +479,8 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Show parsed items count
-                  if (_parsedItems.isNotEmpty)
+                  // Show parsed items with checkboxes
+                  if (_parsedItems.isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -426,17 +491,121 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '✅ Found ${_parsedItems.length} items',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '✅ Found ${_parsedItems.length} items (${_selectedIndices.length} selected)',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green,
+                                ),
+                              ),
+                              if (_parsedItems.isNotEmpty)
+                                PopupMenuButton(
+                                  onSelected: (value) {
+                                    if (value == 'selectAll') {
+                                      _selectAll();
+                                    } else if (value == 'clearAll') {
+                                      _clearSelection();
+                                    } else if (value == 'delete') {
+                                      _deleteSelected();
+                                    }
+                                  },
+                                  itemBuilder: (BuildContext context) => [
+                                    const PopupMenuItem(
+                                      value: 'selectAll',
+                                      child: Text('Select All'),
+                                    ),
+                                    const PopupMenuItem(
+                                      value: 'clearAll',
+                                      child: Text('Clear Selection'),
+                                    ),
+                                    if (_selectedIndices.isNotEmpty)
+                                      const PopupMenuItem(
+                                        value: 'delete',
+                                        child: Text(
+                                          'Delete Selected',
+                                          style: TextStyle(color: Colors.red),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          // Scrollable list of items with checkboxes
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 250),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.green.withOpacity(0.5)),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: _parsedItems.length,
+                              itemBuilder: (context, index) {
+                                final item = _parsedItems[index];
+                                final isSelected = _selectedIndices.contains(index);
+                                final itemTitle = item['title'] ?? item['question'] ?? item['statement'] ?? 'Item ${index + 1}';
+                                
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? Colors.green.withOpacity(0.15) : null,
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: Colors.green.withOpacity(0.2),
+                                      ),
+                                    ),
+                                  ),
+                                  child: CheckboxListTile(
+                                    value: isSelected,
+                                    onChanged: (value) {
+                                      _toggleSelection(index);
+                                    },
+                                    title: Text(
+                                      itemTitle.toString().length > 60
+                                          ? '${itemTitle.toString().substring(0, 60)}...'
+                                          : itemTitle.toString(),
+                                      style: const TextStyle(fontSize: 12),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    subtitle: Text(
+                                      'Item ${index + 1}',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.grey[500],
+                                      ),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                                    dense: true,
+                                  ),
+                                );
+                              },
                             ),
                           ),
-                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ] else if (_fileContentController.text.isNotEmpty && _parsedItems.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange),
+                      ),
+                      child: const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            'Preview: ${_parsedItems.take(2).map((item) => '• ${item['title'] ?? item['question'] ?? 'Item'}').join('\n')}${_parsedItems.length > 2 ? '\n• ... and ${_parsedItems.length - 2} more' : ''}',
-                            style: const TextStyle(fontSize: 12),
+                            '⚠️ Click "Parse Content" to process your file',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange,
+                            ),
                           ),
                         ],
                       ),
