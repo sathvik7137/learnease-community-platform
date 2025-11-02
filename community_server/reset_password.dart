@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:bcrypt/bcrypt.dart';
 
@@ -20,9 +21,15 @@ void main() {
   final user = result.first;
   print('Found user: ${user['email']}');
   
-  // Use a fixed test password
-  const newPassword = 'Test123456';
-  print('\n🔑 Using test password: $newPassword');
+  // Ask for new password
+  stdout.write('\nEnter new password: ');
+  final newPassword = stdin.readLineSync() ?? '';
+  
+  if (newPassword.isEmpty) {
+    print('❌ Password cannot be empty!');
+    db.dispose();
+    return;
+  }
   
   // Hash the new password
   print('\n🔄 Hashing password...');

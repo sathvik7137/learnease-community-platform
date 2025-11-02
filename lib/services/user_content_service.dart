@@ -36,23 +36,6 @@ class UserContentService {
   // If check fails, assume not taken to avoid false positives
   return false;
   }
-
-  // Get username suggestions when a username is taken
-  static Future<List<String>> suggestUsernames(String baseUsername) async {
-    try {
-      final url = Uri.parse('$_serverUrl/api/auth/suggest-username?base=$baseUsername');
-      final response = await http.get(url).timeout(_timeout);
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['suggestions'] is List) {
-          return List<String>.from(data['suggestions'] as List);
-        }
-      }
-    } catch (e) {
-      print('Username suggestion failed: $e');
-    }
-    return [];
-  }
   static const String _contentKey = 'user_contributions';
   static const String _usernameKey = 'user_name';
   
@@ -137,17 +120,6 @@ class UserContentService {
       await prefs.setString(_contentKey, jsonEncode(jsonList));
     } catch (e) {
       print('Failed to cache contributions: $e');
-    }
-  }
-  
-  // Clear cached contributions on logout (privacy/security)
-  static Future<void> clearCachedContributions() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_contentKey);
-      print('✅ Cached contributions cleared on logout');
-    } catch (e) {
-      print('Failed to clear cached contributions: $e');
     }
   }
   
@@ -240,52 +212,32 @@ class UserContentService {
     }
   }
 
-  // Batch upload multiple contributions
+  // Batch add multiple contributions
   static Future<Map<String, dynamic>> batchAddContributions(List<UserContent> contents) async {
-    try {
-      // Convert all contents to JSON
-      final jsonList = contents.map((c) => c.toJson()).toList();
-      
-      // Try to upload to server in batch
-      final response = await AuthService().authenticatedRequest(
-        'POST',
-        '/api/contributions/batch',
-        body: {'items': jsonList},
-      );
-      
-      if (response.statusCode == 200) {
-        final result = jsonDecode(response.body) as Map<String, dynamic>;
-        // Success - refresh local cache
-        await getAllContributions();
-        return result;
-      } else {
-        throw Exception('Server returned ${response.statusCode}: ${response.body}');
-      }
-    } catch (e) {
-      print('Batch server upload failed: $e, saving locally');
-      
-      // Fallback to local storage - save all items locally
+    int successCount = 0;
+    int failureCount = 0;
+    final List<String> errors = [];
+
+    for (final content in contents) {
       try {
-        final allContributions = await _getLocalContributions();
-        allContributions.addAll(contents);
-        await _cacheContributions(allContributions);
-        return {
-          'success': true,
-          'totalCount': contents.length,
-          'successCount': contents.length,
-          'failureCount': 0,
-          'note': 'Saved locally - server sync pending',
-        };
+        final success = await addContribution(content);
+        if (success) {
+          successCount++;
+        } else {
+          failureCount++;
+          errors.add('Failed to add contribution');
+        }
       } catch (e) {
-        return {
-          'success': false,
-          'totalCount': contents.length,
-          'successCount': 0,
-          'failureCount': contents.length,
-          'error': 'Failed to save: $e',
-        };
+        failureCount++;
+        errors.add('Error adding contribution: $e');
       }
     }
+
+    return {
+      'successCount': successCount,
+      'failureCount': failureCount,
+      'errors': errors,
+    };
   }
   
   // Update existing contribution (on server with local fallback)

@@ -1,13 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-// Helper to add Noto Sans as fallback for comprehensive Unicode support
-TextStyle _addNotoSansFallback(TextStyle style) {
-  return style.copyWith(
-    fontFamilyFallback: const ['NotoSans', 'Roboto'],
-  );
-}
-
 class AppTheme {
   // Primary Colors
   static const Color primaryColorLight = Color(0xFF5C6BC0);
@@ -33,7 +26,7 @@ class AppTheme {
   static const Color errorColor = Color(0xFFFF5252);
   static const Color infoColor = Color(0xFF2196F3);
 
-  /// Light Theme - Optimized for performance
+  /// Light Theme
   static ThemeData lightTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
@@ -57,74 +50,62 @@ class AppTheme {
         letterSpacing: 0.5,
       ),
       centerTitle: false,
-      scrolledUnderElevation: 0, // Smooth app bar transitions
     ),
     textTheme: TextTheme(
       displayLarge: GoogleFonts.poppins(
         fontSize: 32,
         fontWeight: FontWeight.bold,
         color: lightText,
-        height: 1.2,
       ),
       displayMedium: GoogleFonts.poppins(
         fontSize: 28,
         fontWeight: FontWeight.bold,
         color: lightText,
-        height: 1.2,
       ),
       displaySmall: GoogleFonts.poppins(
         fontSize: 24,
         fontWeight: FontWeight.bold,
         color: lightText,
-        height: 1.3,
       ),
       headlineMedium: GoogleFonts.poppins(
         fontSize: 20,
         fontWeight: FontWeight.bold,
         color: lightText,
-        height: 1.3,
       ),
       headlineSmall: GoogleFonts.poppins(
         fontSize: 18,
         fontWeight: FontWeight.w600,
         color: lightText,
-        height: 1.3,
       ),
       titleLarge: GoogleFonts.poppins(
         fontSize: 16,
         fontWeight: FontWeight.bold,
         color: lightText,
-        height: 1.4,
       ),
       titleMedium: GoogleFonts.poppins(
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: lightText,
-        height: 1.4,
       ),
       titleSmall: GoogleFonts.poppins(
         fontSize: 12,
         fontWeight: FontWeight.w600,
         color: lightText,
-        height: 1.4,
       ),
       bodyLarge: GoogleFonts.inter(
         fontSize: 16,
         fontWeight: FontWeight.w500,
         color: lightText,
-        height: 1.5,
       ),
       bodyMedium: GoogleFonts.inter(
         fontSize: 14,
         fontWeight: FontWeight.w400,
         color: lightText,
-        height: 1.5,
       ),
       bodySmall: GoogleFonts.inter(
         fontSize: 12,
         fontWeight: FontWeight.w400,
         color: lightSubtleText,
-        height: 1.5,
       ),
       labelLarge: GoogleFonts.poppins(
         fontSize: 14,
@@ -134,17 +115,16 @@ class AppTheme {
     ),
     cardTheme: CardThemeData(
       color: lightSurface,
-      elevation: 2, // Reduced from 4 for better performance
+      elevation: 4,
       shadowColor: Colors.black.withOpacity(0.1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      clipBehavior: Clip.antiAlias, // Better clipping performance
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: primaryColorLight,
         foregroundColor: Colors.white,
-        elevation: 4,
+        elevation: 6,
         shadowColor: primaryColorLight.withOpacity(0.5),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -152,7 +132,6 @@ class AppTheme {
           fontSize: 16,
           fontWeight: FontWeight.bold,
         ),
-        animationDuration: const Duration(milliseconds: 150), // Faster button animations
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -165,7 +144,6 @@ class AppTheme {
           fontSize: 16,
           fontWeight: FontWeight.bold,
         ),
-        animationDuration: const Duration(milliseconds: 150),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
@@ -238,7 +216,7 @@ class AppTheme {
     ),
   );
 
-  /// Dark Theme - Optimized for performance
+  /// Dark Theme
   static ThemeData darkTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
@@ -262,74 +240,62 @@ class AppTheme {
         letterSpacing: 0.5,
       ),
       centerTitle: false,
-      scrolledUnderElevation: 0, // Smooth app bar transitions
     ),
     textTheme: TextTheme(
       displayLarge: GoogleFonts.poppins(
         fontSize: 32,
         fontWeight: FontWeight.bold,
         color: darkText,
-        height: 1.2,
       ),
       displayMedium: GoogleFonts.poppins(
         fontSize: 28,
         fontWeight: FontWeight.bold,
         color: darkText,
-        height: 1.2,
       ),
       displaySmall: GoogleFonts.poppins(
         fontSize: 24,
         fontWeight: FontWeight.bold,
         color: darkText,
-        height: 1.3,
       ),
       headlineMedium: GoogleFonts.poppins(
         fontSize: 20,
         fontWeight: FontWeight.bold,
         color: darkText,
-        height: 1.3,
       ),
       headlineSmall: GoogleFonts.poppins(
         fontSize: 18,
         fontWeight: FontWeight.w600,
         color: darkText,
-        height: 1.3,
       ),
       titleLarge: GoogleFonts.poppins(
         fontSize: 16,
         fontWeight: FontWeight.bold,
         color: darkText,
-        height: 1.4,
       ),
       titleMedium: GoogleFonts.poppins(
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: darkText,
-        height: 1.4,
       ),
       titleSmall: GoogleFonts.poppins(
         fontSize: 12,
         fontWeight: FontWeight.w600,
         color: darkText,
-        height: 1.4,
       ),
       bodyLarge: GoogleFonts.inter(
         fontSize: 16,
         fontWeight: FontWeight.w500,
         color: darkText,
-        height: 1.5,
       ),
       bodyMedium: GoogleFonts.inter(
         fontSize: 14,
         fontWeight: FontWeight.w400,
         color: darkText,
-        height: 1.5,
       ),
       bodySmall: GoogleFonts.inter(
         fontSize: 12,
         fontWeight: FontWeight.w400,
         color: darkSubtleText,
-        height: 1.5,
       ),
       labelLarge: GoogleFonts.poppins(
         fontSize: 14,
@@ -339,17 +305,16 @@ class AppTheme {
     ),
     cardTheme: CardThemeData(
       color: darkSurface,
-      elevation: 2, // Reduced from 4 for better performance
+      elevation: 4,
       shadowColor: Colors.black.withOpacity(0.5),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      clipBehavior: Clip.antiAlias, // Better clipping performance
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: primaryColorDark,
         foregroundColor: Colors.white,
-        elevation: 4,
+        elevation: 6,
         shadowColor: primaryColorDark.withOpacity(0.5),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -357,7 +322,6 @@ class AppTheme {
           fontSize: 16,
           fontWeight: FontWeight.bold,
         ),
-        animationDuration: const Duration(milliseconds: 150), // Faster button animations
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -370,7 +334,6 @@ class AppTheme {
           fontSize: 16,
           fontWeight: FontWeight.bold,
         ),
-        animationDuration: const Duration(milliseconds: 150),
       ),
     ),
     textButtonTheme: TextButtonThemeData(

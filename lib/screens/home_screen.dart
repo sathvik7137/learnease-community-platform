@@ -5,6 +5,7 @@ import '../models/course.dart';
 import '../services/local_storage.dart';
 import '../services/auth_service.dart';
 import '../utils/app_theme.dart';
+import '../widgets/theme_toggle_button.dart';
 import 'quiz_screen.dart';
 import 'sign_in_screen.dart';
 import 'package:flutter/services.dart';
@@ -697,6 +698,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: const [
+          ThemeToggleButton(
+            size: 26,
+            padding: EdgeInsets.only(right: 16),
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           // Main content with enhanced gradient background

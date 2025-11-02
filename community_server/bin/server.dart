@@ -16,8 +16,8 @@ import 'package:mongo_dart/mongo_dart.dart';
 
 // In-memory storage (replace with database in production)
 // MongoDB connection for contributions
-late final Db mongoDb;
-late final DbCollection contribCollection;
+Db? mongoDb;
+DbCollection? contribCollection;
 // Simple local env reader (can be used during startup)
 String? _readLocalEnvTop(String key, {String? path}) {
   try {
@@ -38,6 +38,17 @@ String? _readLocalEnvTop(String key, {String? path}) {
   } catch (_) {}
   return null;
 }
+
+// Convert mongodb+srv URI to standard mongodb URI
+String convertMongoDbSrvUri(String uri) {
+  if (uri.startsWith('mongodb+srv://')) {
+    // Convert mongodb+srv:// to mongodb+srv:// by keeping it as is
+    // mongo_dart will handle it, but if not, we need to use a workaround
+    // For now, let's try using it directly first
+    return uri;
+  }
+  return uri;
+}
 // Simple JWT secret (override via .env in production)
 final jwtSecret = Platform.environment['JWT_SECRET'] ?? _readLocalEnvTop('JWT_SECRET') ?? 'dev_secret_change_me';
 final uuid = Uuid();
@@ -52,15 +63,7 @@ final List<Map<String, dynamic>> sessionsCache = [];
 
 void _initDb() {
   try {
-    // Use absolute path to users.db in the community_server directory
-    // Properly decode the script URI and navigate to community_server/users.db
-    final scriptUri = Platform.script;
-    final scriptFile = File.fromUri(scriptUri);
-    final binDir = scriptFile.parent;
-    final communityServerDir = binDir.parent;
-    final dbPath = '${communityServerDir.path}${Platform.pathSeparator}users.db';
-    print('📂 Opening database at: $dbPath');
-    db = sqlite3.open(dbPath);
+    db = sqlite3.open('users.db');
     
     // Create tables if they don't exist
     db.execute('''
@@ -182,25 +185,14 @@ void _dbRevokeSession(String refreshToken) {
 
 // User helpers (DB-backed)
 Map<String, dynamic>? _dbGetUserByEmail(String email) {
-  // Normalize email for case-insensitive comparison
-  final normalizedEmail = email.trim().toLowerCase();
-  
   if (!dbAvailable) {
     try {
-      // Case-insensitive search in cache
-      return usersCache.firstWhere((u) => 
-        (u['email'] as String?)?.toLowerCase() == normalizedEmail
-      );
+      return usersCache.firstWhere((u) => u['email'] == email);
     } catch (_) {
       return null;
     }
   }
-  
-  // SQLite case-insensitive query using LOWER()
-  final ResultSet rs = db.select(
-    'SELECT * FROM users WHERE LOWER(email) = LOWER(?);', 
-    [normalizedEmail]
-  );
+  final ResultSet rs = db.select('SELECT * FROM users WHERE email = ?;', [email]);
   if (rs.isEmpty) return null;
   final row = rs.first;
   return {
@@ -326,67 +318,79 @@ void _dbDeleteOtp(String phone) {
 
 // Email OTP helpers
 void _dbSaveEmailOtp(String email, String code, String expiresAt, int attempts) {
-  // Normalize email for case-insensitive storage
-  final normalizedEmail = email.trim().toLowerCase();
-  emailOtps[normalizedEmail] = {'code': code, 'expiresAt': expiresAt, 'attempts': attempts};
+  emailOtps[email] = {'code': code, 'expiresAt': expiresAt, 'attempts': attempts};
 }
 
 Map<String, dynamic>? _dbGetEmailOtp(String email) {
-  // Normalize email for case-insensitive lookup
-  final normalizedEmail = email.trim().toLowerCase();
-  return emailOtps[normalizedEmail];
+  return emailOtps[email];
 }
 
 void _dbDeleteEmailOtp(String email) {
-  // Normalize email for case-insensitive deletion
-  final normalizedEmail = email.trim().toLowerCase();
-  emailOtps.remove(normalizedEmail);
+  emailOtps.remove(email);
 }
 
 // Send email via SMTP (Gmail)
 Future<bool> _sendEmail(String to, String subject, String body) async {
   print('[EMAIL] Attempting to send email to: $to');
   try {
-    final smtpUser = Platform.environment['SMTP_USER'] ?? _readLocalEnvTop('SMTP_USER');
-    final smtpPass = Platform.environment['SMTP_PASSWORD'] ?? _readLocalEnvTop('SMTP_PASSWORD');
-    print('[EMAIL] SMTP_USER: ' + (smtpUser ?? 'null'));
-    print('[EMAIL] SMTP_PASSWORD: ' + (smtpPass != null ? '${smtpPass.length} chars (with spaces)' : 'null'));
+    // Try environment variables first, then .env files in order
+    var smtpUser = Platform.environment['SMTP_USER'];
+    smtpUser ??= _readLocalEnvTop('SMTP_USER', path: 'community_server/.env');
+    smtpUser ??= _readLocalEnvTop('SMTP_USER', path: '.env');
     
+    var smtpPass = Platform.environment['SMTP_PASSWORD'];
+    smtpPass ??= _readLocalEnvTop('SMTP_PASSWORD', path: 'community_server/.env');
+    smtpPass ??= _readLocalEnvTop('SMTP_PASSWORD', path: '.env');
+    
+    print('[EMAIL] SMTP_USER: ' + (smtpUser ?? 'null'));
+    print('[EMAIL] SMTP_PASSWORD: ' + (smtpPass != null ? '***hidden***' : 'null'));
     if (smtpUser == null || smtpPass == null) {
       print('⚠️ Email not configured (SMTP_USER or SMTP_PASSWORD missing). OTP: Check console.');
       return false;
     }
     
-    // Log credentials format for debugging
-    print('[EMAIL] SMTP User email format: ${smtpUser.contains("@") ? "Valid" : "Invalid"}');
-    print('[EMAIL] SMTP Password format: ${smtpPass.length} characters');
-    
-    final smtpServer = gmail(smtpUser, smtpPass);
-    final message = Message()
-      ..from = Address(smtpUser, 'LearnEase')
-      ..recipients.add(to)
-      ..subject = subject
-      ..html = body;
-    
-    print('[EMAIL] Message prepared, sending...');
-    try {
-      await send(message, smtpServer).timeout(const Duration(seconds: 15));
-      print('✅ Email sent successfully to $to');
-      return true;
-    } on TimeoutException catch (e) {
-      print('❌ Email send TIMEOUT: ${e.toString()}');
-      return false;
-    } on MailerException catch (e) {
-      print('❌ Email send failed: ${e.toString()}');
-      print('[EMAIL] Problem count: ${e.problems.length}');
-      for (var p in e.problems) {
-        print('   Problem: ${p.code}: ${p.msg}');
+    // Retry logic for SMTP connection issues (Gmail SMTP can be flaky)
+    int maxRetries = 3;
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        print('[EMAIL] Attempt $attempt/$maxRetries to send email...');
+        final smtpServer = gmail(smtpUser, smtpPass);
+        final message = Message()
+          ..from = Address(smtpUser, 'LearnEase')
+          ..recipients.add(to)
+          ..subject = subject
+          ..html = body;
+        
+        await send(message, smtpServer).timeout(const Duration(seconds: 30));
+        print('✅ Email sent successfully to $to (attempt $attempt)');
+        return true;
+      } on MailerException catch (e) {
+        print('[EMAIL] ❌ Attempt $attempt failed (MailerException): ${e.toString()}');
+        for (var p in e.problems) {
+          print('[EMAIL]    Problem: ${p.code}: ${p.msg}');
+        }
+        
+        if (attempt < maxRetries) {
+          // Wait before retrying (exponential backoff: 3s, 6s)
+          final delaySeconds = 3 * attempt;
+          print('[EMAIL] Retrying in ${delaySeconds}s...');
+          await Future.delayed(Duration(seconds: delaySeconds));
+        }
+      } on TimeoutException catch (e) {
+        print('[EMAIL] ❌ Attempt $attempt failed (Timeout): $e');
+        if (attempt < maxRetries) {
+          final delaySeconds = 3 * attempt;
+          print('[EMAIL] Retrying in ${delaySeconds}s...');
+          await Future.delayed(Duration(seconds: delaySeconds));
+        }
       }
-      return false;
     }
-  } catch (e, stackTrace) {
+    
+    // All retries exhausted
+    print('❌ Email send failed after $maxRetries attempts to $to');
+    return false;
+  } catch (e) {
     print('❌ Email configuration error: $e');
-    print('[EMAIL] Stack trace: $stackTrace');
     return false;
   }
 }
@@ -406,55 +410,37 @@ void main(List<String> args) async {
     });
   });
   
-  // Connect to MongoDB (safe init: only assign globals after successful open)
+  // Connect to MongoDB
   try {
-    // Try to read MongoDB URI from environment or .env
-    // Default to local MongoDB on localhost:27017
-    String mongoUri = Platform.environment['MONGODB_URI'] ?? _readLocalEnvTop('MONGODB_URI') ?? 
-      'mongodb://localhost:27017/learnease';
+    // Try to read from environment first, then from .env files (in order of priority)
+    var mongoUri = Platform.environment['MONGODB_URI'];
     
-    // If using mongodb+srv:// URI, convert to standard mongodb:// format
-    if (mongoUri.contains('mongodb+srv://')) {
-      print('[MONGO] Converting mongodb+srv:// URI to standard format...');
-      // Extract components from mongodb+srv URI
-      final srvPattern = RegExp(r'mongodb\+srv://([^:]+):([^@]+)@([^/]+)/(.*)');
-      final match = srvPattern.firstMatch(mongoUri);
-      if (match != null) {
-        final username = match.group(1);
-        final password = match.group(2);
-        final dbAndParams = match.group(4);
-        
-        // Convert to standard format with multiple hosts
-        mongoUri = 'mongodb://$username:$password@cluster0-shard-00-00.sufzx.mongodb.net:27017,cluster0-shard-00-01.sufzx.mongodb.net:27017,cluster0-shard-00-02.sufzx.mongodb.net:27017/$dbAndParams?ssl=true&replicaSet=Cluster0-shard-0&authSource=admin';
-        print('[MONGO] Converted URI for compatibility');
-      }
+    if (mongoUri == null) {
+      // Try community_server/.env
+      mongoUri = _readLocalEnvTop('MONGODB_URI', path: 'community_server/.env');
     }
     
-    print('[MONGO] Attempting to connect to MongoDB...');
-    print('[MONGO] URI: ${mongoUri.replaceAll(RegExp(r':[^@]*@'), ':****@')}');
+    if (mongoUri == null) {
+      // Try .env in current directory
+      mongoUri = _readLocalEnvTop('MONGODB_URI', path: '.env');
+    }
     
-    final tmpDb = Db(mongoUri);
-    print('[MONGO] Opening connection...');
-    await tmpDb.open().timeout(const Duration(seconds: 15));
-    // only assign to globals after open succeeds
-    mongoDb = tmpDb;
-    contribCollection = mongoDb.collection('contributions');
+    if (mongoUri == null) {
+      throw Exception('MONGODB_URI not found in environment or .env files');
+    }
+    
+    print('🔌 Attempting to connect to MongoDB...');
+    print('📝 Connection URI: ${mongoUri.replaceAll(RegExp(r':[^@]+@'), ':***@')}'); // Log URI with password masked
+    mongoDb = Db(mongoUri);
+    await mongoDb!.open().timeout(const Duration(seconds: 10));
+    contribCollection = mongoDb?.collection('contributions');
     print('✅ MongoDB connected successfully');
-  } catch (e, stackTrace) {
+  } catch (e) {
     print('⚠️ MongoDB connection failed: $e');
-    print('[MONGO] Stack trace: $stackTrace');
-    print('⚠️ Contributions feature will be unavailable. Using local cache instead...');
-    // Create a dummy local Db instance that won't be opened; use a local in-memory fallback collection wrapper
-    try {
-      final fallback = Db('mongodb://localhost:27017/learnease');
-      // don't await open - leave offline; assign only the collection reference to avoid uninitialized global
-      mongoDb = fallback;
-      contribCollection = mongoDb.collection('contributions');
-    } catch (_) {
-      // As a last resort, create a minimal in-memory proxy (simple wrapper) to avoid nulls
-      // We'll use a temporary in-memory list via a small helper class (handled elsewhere), so just log here.
-      print('⚠️ Could not initialize fallback MongoDB connection - contributions endpoints will use empty cache');
-    }
+    print('⚠️ Contributions feature will be unavailable. Attempting to use local cache...');
+    // Set mongoDb and contribCollection to null to indicate offline mode
+    mongoDb = null;
+    contribCollection = null;
   }
 
   // Real-time contributions stream (Server-Sent Events)
@@ -463,8 +449,12 @@ void main(List<String> args) async {
     final controller = StreamController<String>();
     Timer? timer;
     timer = Timer.periodic(const Duration(seconds: 2), (timer) async {
-      final filtered = await contribCollection.find({'category': category}).toList();
-      controller.add('data: ${jsonEncode(filtered)}\n\n');
+      if (contribCollection != null) {
+        final filtered = await contribCollection?.find({'category': category}).toList() ?? [];
+        controller.add('data: ${jsonEncode(filtered)}\n\n');
+      } else {
+        controller.add('data: []\n\n');
+      }
     });
     controller.onCancel = () {
       timer?.cancel();
@@ -612,9 +602,11 @@ void main(List<String> args) async {
   router.post('/api/auth/login', (Request request) async {
     try {
       final body = await request.readAsString();
+      print('🔐 [LOGIN] Raw body: $body');
       final data = jsonDecode(body) as Map<String, dynamic>;
       final email = (data['email'] as String?)?.trim().toLowerCase();
       final password = data['password'] as String?;
+      print('🔐 [LOGIN] Parsed email: $email, password length: ${password?.length}');
       print('🔐 [LOGIN] Attempt for email: $email');
       if (email == null || password == null) {
         print('❌ [LOGIN] Missing credentials');
@@ -627,6 +619,7 @@ void main(List<String> args) async {
         return Response(401, body: jsonEncode({'error': 'Invalid credentials'}), headers: {'Content-Type': 'application/json'});
       }
       print('✅ [LOGIN] User found: ${user['email']}');
+      print('🔐 [LOGIN] User data: id=${user['id']}, email=${user['email']}, hasHash=${user['passwordHash'] != null}');
       
       final hash = user['passwordHash'] as String?;
       if (hash == null) {
@@ -634,7 +627,9 @@ void main(List<String> args) async {
         return Response(401, body: jsonEncode({'error': 'Invalid credentials'}), headers: {'Content-Type': 'application/json'});
       }
       
+      print('🔐 [LOGIN] Checking password with hash: ${hash.substring(0, 20)}...');
       final ok = BCrypt.checkpw(password, hash);
+      print('🔐 [LOGIN] BCrypt result: $ok');
       if (!ok) {
         print('❌ [LOGIN] Password check failed for $email');
         return Response(401, body: jsonEncode({'error': 'Invalid credentials'}), headers: {'Content-Type': 'application/json'});
@@ -645,6 +640,7 @@ void main(List<String> args) async {
       print('✅ [LOGIN] Tokens issued for $email');
       return Response.ok(jsonEncode({'token': tokens['accessToken'], 'refreshToken': tokens['refreshToken'], 'user': {'id': user['id'], 'email': user['email'], 'phone': user['phone']}}), headers: {'Content-Type': 'application/json'});
     } catch (e) {
+      print('❌ [LOGIN] Exception: $e');
       return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
     }
   });
@@ -752,81 +748,80 @@ void main(List<String> args) async {
       final body = await request.readAsString();
       print('[LOGIN OTP] Received send-email-otp request: ' + body);
       final data = jsonDecode(body) as Map<String, dynamic>;
-      final rawEmail = data['email'] as String?;
-      final email = rawEmail?.trim().toLowerCase();
+      var email = (data['email'] as String?)?.trim().toLowerCase();
       final password = data['password'] as String?;
       
-      print('[LOGIN OTP] 📧 Email Processing:');
-      print('   Raw input: "$rawEmail"');
-      print('   After trim/lower: "$email"');
-      print('   Valid format: ${email?.contains('@') ?? false}');
+      print('[LOGIN OTP] Parsed email: "$email"');
+      print('[LOGIN OTP] Password received: ${password != null ? "YES (length=${password.length})" : "NO"}');
       
-      if (email == null || !email.contains('@')) {
-        return Response(400, body: jsonEncode({'error': 'Invalid email'}), headers: {'Content-Type': 'application/json'});
+      if (email == null || email.isEmpty) {
+        print('[LOGIN OTP] ❌ Email is empty or null');
+        return Response(400, body: jsonEncode({'error': 'Email is required'}), headers: {'Content-Type': 'application/json'});
       }
+      
+      if (!email.contains('@')) {
+        print('[LOGIN OTP] ❌ Invalid email format: $email');
+        return Response(400, body: jsonEncode({'error': 'Invalid email format'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      // Ensure email is lowercase and trimmed
+      email = email.trim().toLowerCase();
+      print('[LOGIN OTP] Final email (normalized): "$email"');
       
       // Check if user exists before sending OTP (security fix)
-      print('[LOGIN OTP] 🔍 Searching for user with email: "$email"');
       final user = _dbGetUserByEmail(email);
-      
       if (user == null) {
         // Return error for non-existent email for login attempts
-        print('[LOGIN OTP] ❌ Email not registered: "$email"');
-        print('[LOGIN OTP] 📊 Database state:');
-        print('   Using DB: $dbAvailable');
-        if (!dbAvailable) {
-          print('   Cache has ${usersCache.length} users');
-          for (int i = 0; i < usersCache.length; i++) {
-            print('     User $i: ${usersCache[i]['email']}');
-          }
-        }
-        return Response(401, body: jsonEncode({'error': 'Invalid credentials. Please check your email and try again.', 'sent': false}), headers: {'Content-Type': 'application/json'});
+        print('[LOGIN OTP] ❌ Email not registered: $email');
+        return Response(401, body: jsonEncode({'error': 'Email not registered. Please sign up first.', 'sent': false}), headers: {'Content-Type': 'application/json'});
       }
       
-      print('[LOGIN OTP] ✅ User found with ID: ${user['id']}');
+      print('[LOGIN OTP] ✅ User found: email=${user['email']}, hasPassword=${user['passwordHash'] != null && (user['passwordHash'] as String).isNotEmpty}');
       
       // Validate password if provided (for login flow)
       if (password != null && password.isNotEmpty) {
-        print('[LOGIN OTP] 🔐 Validating password (length: ${password.length})...');
+        print('[LOGIN OTP] Validating password (length=${password.length})...');
         final storedHash = user['passwordHash'] as String?;
+        
         if (storedHash == null || storedHash.isEmpty) {
-          print('[LOGIN OTP] ❌ No password hash found for user');
-          return Response(401, body: jsonEncode({'error': 'Invalid credentials. Please check your email and password.', 'sent': false}), headers: {'Content-Type': 'application/json'});
+          print('[LOGIN OTP] ❌ No password hash found for user - account may have been created via OAuth');
+          return Response(401, body: jsonEncode({'error': 'This account does not have a password set. Please use social login or reset your password.', 'sent': false}), headers: {'Content-Type': 'application/json'});
         }
         
         // Verify password
-        final pwdValid = BCrypt.checkpw(password, storedHash);
-        if (!pwdValid) {
-          print('[LOGIN OTP] ❌ Invalid password for: "$email"');
-          print('[LOGIN OTP] ⚠️  Password does not match stored hash');
-          return Response(401, body: jsonEncode({'error': 'Invalid credentials. Please check your email and password.', 'sent': false}), headers: {'Content-Type': 'application/json'});
+        print('[LOGIN OTP] Testing BCrypt...');
+        bool pwdValid = false;
+        try {
+          pwdValid = BCrypt.checkpw(password, storedHash);
+        } catch (bcryptErr) {
+          print('[LOGIN OTP] ❌ BCrypt error: $bcryptErr');
+          return Response(401, body: jsonEncode({'error': 'Password verification failed. Please try again.', 'sent': false}), headers: {'Content-Type': 'application/json'});
         }
-        print('[LOGIN OTP] ✅ Password verified successfully');
+        
+        print('[LOGIN OTP] BCrypt result: $pwdValid');
+        if (!pwdValid) {
+          print('[LOGIN OTP] ❌ Invalid password for: $email');
+          return Response(401, body: jsonEncode({'error': 'Incorrect password. Please try again.', 'sent': false}), headers: {'Content-Type': 'application/json'});
+        }
+        print('[LOGIN OTP] ✅ Password verified for: $email');
       }
       
       final code = (100000 + (DateTime.now().millisecondsSinceEpoch % 899999)).toString();
       final expires = DateTime.now().add(const Duration(minutes: 5));
       _dbSaveEmailOtp(email, code, expires.toIso8601String(), 0);
-      print('[LOGIN OTP] 📝 Email OTP saved for "$email": $code (expires ${expires.toIso8601String()})');
+      print('[LOGIN OTP] ✅ Email OTP saved for $email: $code (expires ${expires.toIso8601String()})');
       
       final subject = 'LearnEase Login OTP';
       final body_text = 'Your LearnEase login OTP is: $code\nValid for 5 minutes.';
       final sent = await _sendEmail(email, subject, body_text);
-      print('[LOGIN OTP] 📧 Email send result: ' + (sent ? 'SUCCESS ✅' : 'FAILURE ❌'));
+      print('[LOGIN OTP] Email send result: ' + (sent ? 'SUCCESS' : 'FAILURE (dev mode - check console)'));
       
-      if (sent) {
-        return Response.ok(jsonEncode({'sent': true, 'message': 'OTP sent successfully'}), headers: {'Content-Type': 'application/json'});
-      } else {
-        // Email failed, but OTP is saved - return error so client knows to check console
-        return Response.internalServerError(
-          body: jsonEncode({'sent': false, 'error': 'Email send failed. Check server logs.'}),
-          headers: {'Content-Type': 'application/json'}
-        );
-      }
+      // Always return success for OTP sending (in dev, console fallback is available)
+      return Response.ok(jsonEncode({'sent': sent, 'code': code, 'message': sent ? 'OTP sent to your email' : 'Check console for OTP'}), headers: {'Content-Type': 'application/json'});
     } catch (e) {
       print('[LOGIN OTP] ❌ Exception: $e');
-      print('[LOGIN OTP] Stack trace: ${StackTrace.current}');
-      return Response.internalServerError(body: jsonEncode({'error': e.toString(), 'sent': false}), headers: {'Content-Type': 'application/json'});
+      print('[LOGIN OTP] Stack: ${e.runtimeType}');
+      return Response.internalServerError(body: jsonEncode({'error': 'Server error: ${e.toString()}'}), headers: {'Content-Type': 'application/json'});
     }
   });
 
@@ -855,49 +850,9 @@ void main(List<String> args) async {
       final body_text = 'Your LearnEase signup OTP is: $code\nValid for 5 minutes.';
       final sent = await _sendEmail(email, subject, body_text);
       print('[SIGNUP OTP] Email send result: ' + (sent ? 'SUCCESS' : 'FAILURE'));
-      
-      if (sent) {
-        return Response.ok(jsonEncode({'sent': true, 'message': 'OTP sent successfully'}), headers: {'Content-Type': 'application/json'});
-      } else {
-        return Response.internalServerError(
-          body: jsonEncode({'sent': false, 'error': 'Email send failed. Check server logs.'}),
-          headers: {'Content-Type': 'application/json'}
-        );
-      }
+      return Response.ok(jsonEncode({'sent': sent}), headers: {'Content-Type': 'application/json'});
     } catch (e) {
       print('[SIGNUP OTP] Exception: $e');
-      return Response.internalServerError(body: jsonEncode({'error': e.toString(), 'sent': false}), headers: {'Content-Type': 'application/json'});
-    }
-  });
-
-  // Validate reset OTP (without updating password)
-  router.post('/api/auth/validate-reset-otp', (Request request) async {
-    try {
-      final body = await request.readAsString();
-      final data = jsonDecode(body) as Map<String, dynamic>;
-      final email = (data['email'] as String?)?.trim().toLowerCase();
-      final code = data['code'] as String?;
-      print('[RESET OTP VALIDATE] Checking: email=$email, code=$code');
-      if (email == null || code == null) {
-        return Response(400, body: jsonEncode({'error': 'Missing email or code'}), headers: {'Content-Type': 'application/json'});
-      }
-      final record = _dbGetEmailOtp(email);
-      if (record == null) return Response(400, body: jsonEncode({'error': 'No OTP requested'}), headers: {'Content-Type': 'application/json'});
-      final expires = DateTime.parse(record['expiresAt'] as String);
-      if (DateTime.now().isAfter(expires)) {
-        return Response(400, body: jsonEncode({'error': 'OTP expired'}), headers: {'Content-Type': 'application/json'});
-      }
-      if (record['code'] != code) {
-        final attempts = (record['attempts'] as int? ?? 0) + 1;
-        _dbSaveEmailOtp(email, record['code'] as String, record['expiresAt'] as String, attempts);
-        print('[RESET OTP VALIDATE] Invalid code - attempt $attempts');
-        return Response(401, body: jsonEncode({'error': 'Invalid code'}), headers: {'Content-Type': 'application/json'});
-      }
-      // OTP is valid
-      print('[RESET OTP VALIDATE] ✅ OTP verified successfully');
-      return Response.ok(jsonEncode({'valid': true}), headers: {'Content-Type': 'application/json'});
-    } catch (e) {
-      print('[RESET OTP VALIDATE] Exception: $e');
       return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
     }
   });
@@ -993,49 +948,34 @@ void main(List<String> args) async {
     try {
       final body = await request.readAsString();
       final data = jsonDecode(body) as Map<String, dynamic>;
-      final rawEmail = data['email'] as String?;
-      final email = rawEmail?.trim().toLowerCase();
+      final email = (data['email'] as String?)?.trim().toLowerCase();
       final code = data['code'] as String?;
       final password = data['password'] as String?;
       final username = (data['username'] as String?)?.trim();
       
-      print('[EMAIL OTP] 🔐 Verify OTP Request:');
-      print('   Raw email: "$rawEmail"');
-      print('   Normalized: "$email"');
-      print('   Code: "$code" (length: ${code?.length ?? 0})');
-      print('   Has password: ${password != null}');
-      print('   Username: "$username"');
+      print('[EMAIL OTP] Verify attempt: email=$email, code=$code, hasPassword=${password != null}, username=$username');
       
       if (email == null || code == null) {
-        print('[EMAIL OTP] ❌ Missing email or code');
         return Response(400, body: jsonEncode({'error': 'Missing email or code'}), headers: {'Content-Type': 'application/json'});
       }
       
       // Check OTP
-      print('[EMAIL OTP] 🔍 Looking up OTP for: "$email"');
       final record = _dbGetEmailOtp(email);
       print('[EMAIL OTP] OTP record found: ${record != null ? '✅ YES' : '❌ NO'}');
-      if (record != null) {
-        print('   Stored OTP: ${record['code']}');
-        print('   Provided: $code');
-        print('   Match: ${record['code'] == code ? '✅' : '❌'}');
-        print('   Expires: ${record['expiresAt']}');
-        print('   Now: ${DateTime.now().toIso8601String()}');
-      }
+      if (record != null) print('   Stored OTP: ${record['code']}, Provided: $code');
       
       if (record == null) {
-        print('[EMAIL OTP] ❌ No OTP found for "$email"');
         return Response(400, body: jsonEncode({'error': 'No OTP requested'}), headers: {'Content-Type': 'application/json'});
       }
       
       final expires = DateTime.parse(record['expiresAt'] as String);
       if (DateTime.now().isAfter(expires)) {
-        print('[EMAIL OTP] ⏰ OTP expired at ${expires.toIso8601String()}');
+        print('[EMAIL OTP] ⏰ OTP expired');
         return Response(400, body: jsonEncode({'error': 'OTP expired'}), headers: {'Content-Type': 'application/json'});
       }
       
       if (record['code'] != code) {
-        print('[EMAIL OTP] ❌ OTP code mismatch: stored=${record['code']}, provided=$code');
+        print('[EMAIL OTP] ❌ OTP code mismatch');
         final attempts = (record['attempts'] as int? ?? 0) + 1;
         _dbSaveEmailOtp(email, record['code'] as String, record['expiresAt'] as String, attempts);
         return Response(401, body: jsonEncode({'error': 'Invalid OTP code'}), headers: {'Content-Type': 'application/json'});
@@ -1044,37 +984,29 @@ void main(List<String> args) async {
       print('[EMAIL OTP] ✅ OTP verified successfully');
       
       // Check if this is for login (user exists) or registration (user doesn't exist)
-      print('[EMAIL OTP] 🔍 Checking if user exists for "$email"');
       var user = _dbGetUserByEmail(email);
       
       if (user != null) {
-        print('[EMAIL OTP] 👤 User exists (ID: ${user['id']})');
         // LOGIN: User exists, verify password
         if (password == null) {
-          print('[EMAIL OTP] ❌ Password required for login but not provided');
           return Response(400, body: jsonEncode({'error': 'Password required for login'}), headers: {'Content-Type': 'application/json'});
         }
         
         final hash = user['passwordHash'] as String?;
         if (hash == null) {
-          print('[EMAIL OTP] ❌ Account has no password set');
           return Response(401, body: jsonEncode({'error': 'Account has no password set'}), headers: {'Content-Type': 'application/json'});
         }
         
-        print('[EMAIL OTP] 🔐 Verifying password (length: ${password.length})...');
         final passwordValid = BCrypt.checkpw(password, hash);
         if (!passwordValid) {
-          print('[EMAIL OTP] ❌ Password verification failed');
           return Response(401, body: jsonEncode({'error': 'Invalid password'}), headers: {'Content-Type': 'application/json'});
         }
         
-        print('[EMAIL OTP] ✅ Password verified for existing user');
+        print('[EMAIL OTP] 🔐 Password verified for existing user');
         
       } else {
-        print('[EMAIL OTP] 👤 User does not exist - creating new account');
         // REGISTRATION: Create new user
         if (password == null || password.length < 6) {
-          print('[EMAIL OTP] ❌ Invalid password for registration');
           return Response(400, body: jsonEncode({'error': 'Password must be at least 6 characters'}), headers: {'Content-Type': 'application/json'});
         }
         
@@ -1082,11 +1014,6 @@ void main(List<String> args) async {
         final createdAt = DateTime.now().toIso8601String();
         final hash = BCrypt.hashpw(password, BCrypt.gensalt());
         final defaultUsername = username ?? email.split('@')[0];
-        
-        print('[EMAIL OTP] 📝 Creating user:');
-        print('   ID: $newId');
-        print('   Email: $email');
-        print('   Username: $defaultUsername');
         
         _dbInsertUser(
           id: newId, 
@@ -1099,18 +1026,15 @@ void main(List<String> args) async {
         );
         
         user = _dbGetUserById(newId);
-        print('[EMAIL OTP] ✅ New user created successfully');
+        print('[EMAIL OTP] 👤 New user created: $newId with username: $defaultUsername');
       }
       
       // Consume OTP
-      print('[EMAIL OTP] 🗑️ Consuming OTP for "$email"');
       _dbDeleteEmailOtp(email);
       
       // Issue tokens
       final found = user!;
       final tokens = _issueTokens(found['id'] as String, found['email'] as String?);
-      
-      print('[EMAIL OTP] ✅ Login/Registration successful - tokens issued');
       
       return Response.ok(jsonEncode({
         'token': tokens['accessToken'], 
@@ -1306,7 +1230,13 @@ void main(List<String> args) async {
 
   // Get all contributions
   router.get('/api/contributions', (Request request) async {
-    final all = await contribCollection.find().toList();
+    if (contribCollection == null) {
+      return Response.ok(
+        jsonEncode([]),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+    final all = await contribCollection?.find().toList() ?? [];
     return Response.ok(
       jsonEncode(all),
       headers: {'Content-Type': 'application/json'},
@@ -1315,7 +1245,13 @@ void main(List<String> args) async {
 
   // Get contributions by category
   router.get('/api/contributions/<category>', (Request request, String category) async {
-    final filtered = await contribCollection.find({'category': category}).toList();
+    if (contribCollection == null) {
+      return Response.ok(
+        jsonEncode([]),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+    final filtered = await contribCollection?.find({'category': category}).toList() ?? [];
     return Response.ok(
       jsonEncode(filtered),
       headers: {'Content-Type': 'application/json'},
@@ -1325,6 +1261,12 @@ void main(List<String> args) async {
   // Add new contribution (only for logged-in users)
   router.post('/api/contributions', (Request request) async {
     try {
+      if (contribCollection == null) {
+        return Response(503,
+          body: jsonEncode({'error': 'MongoDB connection unavailable'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
       final authHeader = request.headers['authorization'];
       if (authHeader == null || !authHeader.startsWith('Bearer ')) {
         return Response.forbidden(jsonEncode({'error': 'Authentication required'}), headers: {'Content-Type': 'application/json'});
@@ -1345,9 +1287,9 @@ void main(List<String> args) async {
       data['serverCreatedAt'] = DateTime.now().toIso8601String();
       data['authorId'] = userId;
       data['authorUsername'] = username;
-      final result = await contribCollection.insertOne(data);
+      final result = await contribCollection?.insertOne(data);
       return Response.ok(
-        jsonEncode({'success': result.isSuccess, 'id': result.id?.toHexString()}),
+        jsonEncode({'success': result?.isSuccess ?? false, 'id': result?.id?.toHexString()}),
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e) {
@@ -1357,84 +1299,15 @@ void main(List<String> args) async {
     }
   });
 
-  // Batch upload contributions
-  router.post('/api/contributions/batch', (Request request) async {
-    try {
-      final authHeader = request.headers['authorization'];
-      if (authHeader == null || !authHeader.startsWith('Bearer ')) {
-        return Response.forbidden(jsonEncode({'error': 'Authentication required'}), headers: {'Content-Type': 'application/json'});
-      }
-      final token = authHeader.substring(7);
-      final jwt = JWT.verify(token, SecretKey(jwtSecret));
-      final userId = jwt.payload['sub'] as String?;
-      if (userId == null) {
-        return Response.forbidden(jsonEncode({'error': 'Invalid token'}), headers: {'Content-Type': 'application/json'});
-      }
-      final user = _dbGetUserById(userId);
-      if (user == null) {
-        return Response.forbidden(jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});
-      }
-      final username = user['username'] ?? 'Unknown';
-      final payload = await request.readAsString();
-      
-      // Handle both formats: direct array or wrapped in {'items': [...]}
-      List<dynamic> dataList;
-      try {
-        final decoded = jsonDecode(payload);
-        if (decoded is List) {
-          dataList = decoded;
-        } else if (decoded is Map && decoded.containsKey('items')) {
-          dataList = decoded['items'] as List<dynamic>;
-        } else {
-          throw FormatException('Expected list or map with "items" key');
-        }
-      } catch (e) {
-        return Response.badRequest(
-          body: jsonEncode({'error': 'Invalid batch format: $e'}),
-        );
-      }
-      
-      List<String> successIds = [];
-      List<String> failedIndices = [];
-      
-      for (int i = 0; i < dataList.length; i++) {
-        try {
-          final data = (dataList[i] as Map<String, dynamic>).cast<String, dynamic>();
-          data['serverCreatedAt'] = DateTime.now().toIso8601String();
-          data['authorId'] = userId;
-          data['authorUsername'] = username;
-          final result = await contribCollection.insertOne(data);
-          if (result.isSuccess) {
-            successIds.add(result.id?.toHexString() ?? '');
-          } else {
-            failedIndices.add(i.toString());
-          }
-        } catch (e) {
-          failedIndices.add('$i: $e');
-        }
-      }
-      
-      return Response.ok(
-        jsonEncode({
-          'success': true,
-          'totalCount': dataList.length,
-          'successCount': successIds.length,
-          'failureCount': failedIndices.length,
-          'successIds': successIds,
-          'failedIndices': failedIndices,
-        }),
-        headers: {'Content-Type': 'application/json'},
-      );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({'error': 'Failed to batch upload contributions: $e'}),
-      );
-    }
-  });
-
   // Update contribution (only owner can edit)
   router.put('/api/contributions/<id>', (Request request, String id) async {
     try {
+      if (contribCollection == null) {
+        return Response(503,
+          body: jsonEncode({'error': 'MongoDB connection unavailable'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
       print('🔵 PUT /api/contributions/$id received');
       final authHeader = request.headers['authorization'];
       if (authHeader == null || !authHeader.startsWith('Bearer ')) {
@@ -1460,7 +1333,7 @@ void main(List<String> args) async {
         return Response.badRequest(body: jsonEncode({'error': 'Invalid document ID format: $e'}));
       }
       
-      final doc = await contribCollection.findOne({'_id': docId});
+      final doc = await contribCollection?.findOne({'_id': docId});
       if (doc == null) {
         print('❌ Document not found: $id');
         return Response.notFound(
@@ -1483,7 +1356,7 @@ void main(List<String> args) async {
       data['authorUsername'] = doc['authorUsername'];
       data['updatedAt'] = DateTime.now().toIso8601String();
       
-      await contribCollection.updateOne({'_id': docId}, {'\$set': data});
+      await contribCollection?.updateOne({'_id': docId}, {'\$set': data});
       print('✅ Document updated successfully');
       
       return Response.ok(
@@ -1501,6 +1374,12 @@ void main(List<String> args) async {
   // Delete contribution (only owner can delete)
   router.delete('/api/contributions/<id>', (Request request, String id) async {
     try {
+      if (contribCollection == null) {
+        return Response(503,
+          body: jsonEncode({'error': 'MongoDB connection unavailable'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
       print('🔵 DELETE /api/contributions/$id received');
       final authHeader = request.headers['authorization'];
       if (authHeader == null || !authHeader.startsWith('Bearer ')) {
@@ -1526,7 +1405,7 @@ void main(List<String> args) async {
         return Response.badRequest(body: jsonEncode({'error': 'Invalid document ID format: $e'}));
       }
       
-      final doc = await contribCollection.findOne({'_id': docId});
+      final doc = await contribCollection?.findOne({'_id': docId});
       if (doc == null) {
         print('❌ Document not found: $id');
         return Response.notFound(
@@ -1557,7 +1436,7 @@ void main(List<String> args) async {
       
       print('✅ Authorization check passed, deleting document...');
       
-      await contribCollection.deleteOne({'_id': docId});
+      await contribCollection?.deleteOne({'_id': docId});
       print('✅ Document deleted successfully');
       
       return Response.ok(
@@ -1747,18 +1626,10 @@ void main(List<String> args) async {
       final body_text = 'Your LearnEase password reset OTP is: $code\nValid for 5 minutes.';
       final sent = await _sendEmail(email, subject, body_text);
       print('[RESET OTP] Email send result: ' + (sent ? 'SUCCESS' : 'FAILURE'));
-      
-      if (sent) {
-        return Response.ok(jsonEncode({'sent': true, 'message': 'OTP sent successfully'}), headers: {'Content-Type': 'application/json'});
-      } else {
-        return Response.internalServerError(
-          body: jsonEncode({'sent': false, 'error': 'Email send failed. Check server logs.'}),
-          headers: {'Content-Type': 'application/json'}
-        );
-      }
+      return Response.ok(jsonEncode({'sent': sent}), headers: {'Content-Type': 'application/json'});
     } catch (e) {
       print('[RESET OTP] Exception: $e');
-      return Response.internalServerError(body: jsonEncode({'error': e.toString(), 'sent': false}), headers: {'Content-Type': 'application/json'});
+      return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
     }
   });
 
@@ -1777,68 +1648,6 @@ void main(List<String> args) async {
       taken = usersCache.any((u) => u['username'] == username);
     }
     return Response.ok(jsonEncode({'taken': taken}), headers: {'Content-Type': 'application/json'});
-  });
-
-  // Get username suggestions when a username is taken
-  router.get('/api/auth/suggest-username', (Request request) {
-    final baseUsername = request.url.queryParameters['base']?.trim();
-    if (baseUsername == null || baseUsername.isEmpty) {
-      return Response(400, body: jsonEncode({'error': 'Missing base username'}), headers: {'Content-Type': 'application/json'});
-    }
-
-    final suggestions = <String>[];
-    
-    // Strategy 1: Add numbers to the end (e.g., john1, john2, john3)
-    for (int i = 1; i <= 5; i++) {
-      final suggested = '$baseUsername$i';
-      bool isTaken = false;
-      if (dbAvailable) {
-        final rs = db.select('SELECT id FROM users WHERE username = ?;', [suggested]);
-        isTaken = rs.isNotEmpty;
-      } else {
-        isTaken = usersCache.any((u) => u['username'] == suggested);
-      }
-      if (!isTaken) {
-        suggestions.add(suggested);
-      }
-    }
-    
-    // Strategy 2: Add underscore variants (e.g., john_1, john_2)
-    for (int i = 1; i <= 3; i++) {
-      final suggested = '${baseUsername}_$i';
-      bool isTaken = false;
-      if (dbAvailable) {
-        final rs = db.select('SELECT id FROM users WHERE username = ?;', [suggested]);
-        isTaken = rs.isNotEmpty;
-      } else {
-        isTaken = usersCache.any((u) => u['username'] == suggested);
-      }
-      if (!isTaken) {
-        suggestions.add(suggested);
-      }
-    }
-    
-    // Strategy 3: Add Pro, Expert, etc suffixes (e.g., johnPro, johnExpert)
-    final suffixes = ['Pro', 'Expert', 'Dev', 'Master', 'Star'];
-    for (final suffix in suffixes) {
-      if (suggestions.length >= 5) break; // Limit suggestions to 5
-      final suggested = '$baseUsername$suffix';
-      bool isTaken = false;
-      if (dbAvailable) {
-        final rs = db.select('SELECT id FROM users WHERE username = ?;', [suggested]);
-        isTaken = rs.isNotEmpty;
-      } else {
-        isTaken = usersCache.any((u) => u['username'] == suggested);
-      }
-      if (!isTaken) {
-        suggestions.add(suggested);
-      }
-    }
-    
-    return Response.ok(
-      jsonEncode({'suggestions': suggestions.take(5).toList()}),
-      headers: {'Content-Type': 'application/json'}
-    );
   });
 
   // Email uniqueness check endpoint

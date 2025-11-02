@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:bcrypt/bcrypt.dart';
 
@@ -38,8 +39,10 @@ void main() {
     'Vardhan@123',
     'vardhan123',
     '123456',
+    'Rvav@2004',
     'test1234',
-    'admin123'
+    'admin123',
+    'Test123456'
   ];
   
   print('Testing passwords:');

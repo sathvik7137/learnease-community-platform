@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import '../services/user_content_service.dart';
-import '../widgets/theme_toggle_widget.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final String currentUsername;
@@ -21,82 +19,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   bool _isLoading = false;
-  bool _checkingUsername = false;
-  List<String> _usernameSuggestions = [];
-  String? _usernameError;
 
   @override
   void initState() {
     super.initState();
     _usernameController.text = widget.currentUsername;
-    _usernameController.addListener(_onUsernameChanged);
   }
 
   @override
   void dispose() {
-    _usernameController.removeListener(_onUsernameChanged);
     _usernameController.dispose();
     super.dispose();
-  }
-
-  // Check username availability when user stops typing
-  Future<void> _onUsernameChanged() async {
-    final username = _usernameController.text.trim();
-    
-    // Don't check if username is empty or unchanged
-    if (username.isEmpty || username == widget.currentUsername) {
-      setState(() {
-        _usernameError = null;
-        _usernameSuggestions = [];
-      });
-      return;
-    }
-    
-    // Basic validation
-    if (username.length < 3) {
-      setState(() {
-        _usernameError = 'Username must be at least 3 characters';
-        _usernameSuggestions = [];
-      });
-      return;
-    }
-    
-    if (username.length > 20) {
-      setState(() {
-        _usernameError = 'Username must be less than 20 characters';
-        _usernameSuggestions = [];
-      });
-      return;
-    }
-    
-    // Check if username is taken
-    setState(() {
-      _checkingUsername = true;
-      _usernameError = null;
-      _usernameSuggestions = [];
-    });
-    
-    final isTaken = await UserContentService.isUsernameTaken(username);
-    
-    if (isTaken) {
-      // Get suggestions for alternative usernames
-      final suggestions = await UserContentService.suggestUsernames(username);
-      if (mounted) {
-        setState(() {
-          _usernameError = 'This username is already taken';
-          _usernameSuggestions = suggestions;
-          _checkingUsername = false;
-        });
-      }
-    } else {
-      if (mounted) {
-        setState(() {
-          _usernameError = null;
-          _usernameSuggestions = [];
-          _checkingUsername = false;
-        });
-      }
-    }
   }
 
   Future<void> _saveProfile() async {
@@ -177,7 +110,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             color: Colors.white,
           ),
         ),
-        actions: const [ThemeToggleWidget()],
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(false),
@@ -287,142 +219,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Stack(
-                        children: [
-                          TextFormField(
-                            controller: _usernameController,
-                            enabled: !_isLoading,
-                            decoration: InputDecoration(
-                              hintText: 'Enter your username',
-                              border: InputBorder.none,
-                              prefixIcon: Icon(Icons.person_outline, color: Colors.indigo),
-                              suffixIcon: _checkingUsername
-                                  ? const Padding(
-                                      padding: EdgeInsets.all(12.0),
-                                      child: SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.indigo),
-                                        ),
-                                      ),
-                                    )
-                                  : _usernameError == null && _usernameController.text.isNotEmpty && _usernameController.text != widget.currentUsername
-                                      ? const Icon(Icons.check_circle, color: Colors.green)
-                                      : null,
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Username cannot be empty';
-                              }
-                              if (value.trim().length < 3) {
-                                return 'Username must be at least 3 characters';
-                              }
-                              if (_usernameError != null) {
-                                return _usernameError;
-                              }
-                              return null;
-                            },
-                          ),
-                        ],
+                      child: TextFormField(
+                        controller: _usernameController,
+                        enabled: !_isLoading,
+                        decoration: InputDecoration(
+                          hintText: 'Enter your username',
+                          border: InputBorder.none,
+                          prefixIcon: Icon(Icons.person_outline, color: Colors.indigo),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Username cannot be empty';
+                          }
+                          if (value.trim().length < 3) {
+                            return 'Username must be at least 3 characters';
+                          }
+                          return null;
+                        },
                       ),
                     ),
                   ),
-                  
-                  // Show error message if username is taken
-                  if (_usernameError != null && _usernameError!.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12.0),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.shade300),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                _usernameError!,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.red.shade700,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  
-                  // Show suggestions if username is taken
-                  if (_usernameSuggestions.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12.0),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.amber.shade300),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.lightbulb_outline, color: Colors.amber.shade700, size: 20),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    'Try these suggestions:',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.amber.shade700,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: _usernameSuggestions.map((suggestion) {
-                                return GestureDetector(
-                                  onTap: () {
-                                    _usernameController.text = suggestion;
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.indigo.shade100,
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(color: Colors.indigo.shade300),
-                                    ),
-                                    child: Text(
-                                      suggestion,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.indigo.shade700,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  
                   const SizedBox(height: 32),
 
                   // Save button

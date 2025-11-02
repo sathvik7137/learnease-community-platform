@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../data/course_content.dart';
 import '../services/local_storage.dart';
 import '../services/auth_service.dart';
-import '../services/user_content_service.dart';
 import '../utils/app_theme.dart';
 import '../providers/theme_provider.dart';
 import 'sign_in_screen.dart';
@@ -269,10 +268,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _buildProfileCard(bool isDark) {
-    final cardColor = isDark ? const Color(0xFF1E1E30) : Colors.white;  // Dark blue-grey instead of grey
-    final borderColor = isDark ? const Color(0xFF3A3A4E) : Colors.grey.shade200;  // Lighter border for visibility
+    final cardColor = isDark ? Colors.grey.shade700 : Colors.white;
+    final borderColor = isDark ? Colors.grey.shade500 : Colors.grey.shade200;
     final textColor = isDark ? Colors.white : const Color(0xFF1A237E);
-    final subtextColor = isDark ? Colors.grey.shade200 : const Color(0xFF546E7A);  // Lighter grey for subtext
+    final subtextColor = isDark ? Colors.grey.shade300 : const Color(0xFF546E7A);
     
     return Container(
       decoration: BoxDecoration(
@@ -310,7 +309,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 backgroundColor: cardColor,
                 child: CircleAvatar(
                   radius: 47,
-                  backgroundColor: isDark ? const Color(0xFF2A2A3E) : Colors.grey.shade100,
+                  backgroundColor: isDark ? Colors.grey.shade700 : Colors.grey.shade100,
                   child: Icon(
                     Icons.person,
                     size: 54,
@@ -348,7 +347,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF2A2A3E) : Colors.grey.shade50,
+                color: isDark ? Colors.grey.shade700 : Colors.grey.shade50,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Row(
@@ -358,13 +357,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   Container(
                     height: 40,
                     width: 1,
-                    color: isDark ? const Color(0xFF3A3A4E) : Colors.grey.shade300,
+                    color: isDark ? Colors.grey.shade600 : Colors.grey.shade300,
                   ),
                   _buildStatColumn(isDark, quizzesTaken.toString(), 'Quizzes'),
                   Container(
                     height: 40,
                     width: 1,
-                    color: isDark ? const Color(0xFF3A3A4E) : Colors.grey.shade300,
+                    color: isDark ? Colors.grey.shade600 : Colors.grey.shade300,
                   ),
                   _buildStatColumn(isDark, '$averageScore%', 'Score'),
                 ],
@@ -402,8 +401,8 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _buildProgressSection(bool isDark) {
-    final cardColor = isDark ? const Color(0xFF1E1E30) : Colors.white;  // Dark blue-grey
-    final borderColor = isDark ? const Color(0xFF3A3A4E) : Colors.grey.shade200;
+    final cardColor = isDark ? Colors.grey.shade700 : Colors.white;
+    final borderColor = isDark ? Colors.grey.shade500 : Colors.grey.shade200;
     final textColor = isDark ? Colors.white : const Color(0xFF1A237E);
     
     return Container(
@@ -462,7 +461,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   
   Widget _buildProgressRow(String title, double progress, Color color, bool isDark) {
     final textColor = isDark ? Colors.white : const Color(0xFF424242);
-    final bgColor = isDark ? const Color(0xFF2A2A3E) : Colors.grey.shade200;  // Darker background
+    final bgColor = isDark ? Colors.grey.shade700 : Colors.grey.shade200;
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -510,8 +509,8 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _buildSettingsSection(bool isDark) {
-    final cardColor = isDark ? const Color(0xFF1E1E30) : Colors.white;  // Dark blue-grey
-    final borderColor = isDark ? const Color(0xFF3A3A4E) : Colors.grey.shade200;
+    final cardColor = isDark ? Colors.grey.shade700 : Colors.white;
+    final borderColor = isDark ? Colors.grey.shade500 : Colors.grey.shade200;
     final textColor = isDark ? Colors.white : const Color(0xFF1A237E);
     
     return Container(
@@ -698,9 +697,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         onPressed: () async {
                           final res = await AuthService().revokeToken();
                           if (res.containsKey('success') && res['success'] == true) {
-                            // Clear cached contributions on logout (privacy & security)
-                            await UserContentService.clearCachedContributions();
-                            
                             if (mounted) {
                               setState(() {
                                 _isLoggedIn = false;
@@ -763,11 +759,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _buildRecentActivitySection(bool isDark) {
-    final cardColor = isDark ? const Color(0xFF1E1E30) : Colors.white;  // Dark blue-grey
+    final cardColor = isDark ? Colors.grey.shade900 : Colors.white;
     final textColor = isDark ? Colors.white : Color(0xFF1A237E);
-    final dividerColor = isDark ? const Color(0xFF3A3A4E) : Colors.grey.shade300;  // Better visibility
+    final dividerColor = isDark ? Colors.grey.shade700 : Colors.grey.shade300;
     final gradientColors = isDark 
-      ? [const Color(0xFF1E1E30), const Color(0xFF2A2A3E)]  // Dark blue-grey gradient
+      ? [Colors.grey.shade900, Colors.grey.shade800]
       : [Colors.white, Colors.blue.shade50.withOpacity(0.3)];
     
     return FutureBuilder(

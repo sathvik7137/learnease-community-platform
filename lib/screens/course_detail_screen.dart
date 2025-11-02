@@ -5,7 +5,6 @@ import 'topic_detail_screen.dart';
 import '../services/auth_service.dart';
 import 'sign_in_screen.dart';
 import '../utils/app_theme.dart';
-import '../widgets/theme_toggle_widget.dart';
 
 class CourseDetailScreen extends StatefulWidget {
   final Course course;
@@ -27,8 +26,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      // Fast animation - reduced from 1500ms to 300ms for snappy navigation
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 1500),
     );
     // Ensure user is authenticated before loading course progress
     _ensureAuthAndLoad();
@@ -66,16 +64,16 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
       topicScores[topic.id] = score;
     }
     
-    // Setup fast staggered animations for each card (reduced from 0.1 to 0.05)
+    // Setup staggered animations for each card
     _itemAnimations.clear();
     for (int i = 0; i < widget.course.topics.length; i++) {
-      final start = (i * 0.05).clamp(0.0, 1.0);
-      final end = (start + 0.3).clamp(0.0, 1.0);
+      final start = i * 0.1;
+      final end = start + 0.4;
       _itemAnimations.add(
         Tween<double>(begin: 0.0, end: 1.0).animate(
           CurvedAnimation(
             parent: _animationController,
-            curve: Interval(start, end, curve: Curves.fastLinearToSlowEaseIn),
+            curve: Interval(start.clamp(0.0, 1.0), end.clamp(0.0, 1.0), curve: Curves.easeOut),
           ),
         ),
       );
@@ -119,7 +117,6 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
             color: Colors.white,
           ),
         ),
-        actions: const [ThemeToggleWidget()],
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Container(

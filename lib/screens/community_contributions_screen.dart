@@ -4,11 +4,11 @@ import '../models/user_content.dart';
 import '../services/user_content_service.dart';
 import '../services/auth_service.dart';
 import '../utils/app_theme.dart';
+import '../widgets/theme_toggle_button.dart';
 import 'add_content_screen.dart';
 import 'my_contributions_screen.dart';
 import 'sign_in_screen.dart';
 import 'dart:async';
-import '../widgets/theme_toggle_widget.dart';
 
 class CommunityContributionsScreen extends StatefulWidget {
   const CommunityContributionsScreen({super.key});
@@ -257,6 +257,11 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
               },
             ),
             actions: [
+              // Theme toggle
+              const ThemeToggleButton(
+                size: 24,
+                padding: EdgeInsets.only(right: 8),
+              ),
               // Add Content Button - prominently displayed in app bar
               ElevatedButton.icon(
                 onPressed: _handleAddContentPress,
@@ -299,7 +304,6 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
                   )),
                 ],
               ),
-              const ThemeToggleWidget(),
             ],
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(48),

@@ -4,7 +4,6 @@ import '../services/user_content_service.dart';
 import '../main.dart';
 import 'forgot_password_screen.dart';
 import 'sign_up_screen.dart';
-import '../widgets/theme_toggle_widget.dart';
 
 class SignInScreen extends StatefulWidget {
   final String? initialEmail;
@@ -22,7 +21,6 @@ class _SignInScreenState extends State<SignInScreen> {
   bool _otpSent = false;
   int _step = 0; // 0: email+password, 1: OTP verification
   bool _showSignUpOption = false; // Show signup button when email not registered
-  bool _showPassword = false; // Toggle password visibility
   final AuthService _authService = AuthService();
 
   @override
@@ -37,19 +35,20 @@ class _SignInScreenState extends State<SignInScreen> {
     final email = _email.text.trim();
     final password = _password.text;
     
-    print('[SIGNIN] Email entered: "$email" (length: ${email.length})');
-    print('[SIGNIN] Password entered: (length: ${password.length}, non-empty: ${password.isNotEmpty})');
-    
     if (email.isEmpty || !email.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid email'))
+      _showTopNotification(
+        'Invalid Email ⚠️',
+        'Please enter a valid email address',
+        Colors.orange,
       );
       return;
     }
     
     if (password.isEmpty || password.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a password (min 6 characters)'))
+      _showTopNotification(
+        'Weak Password ⚠️',
+        'Password must be at least 6 characters',
+        Colors.orange,
       );
       return;
     }
@@ -58,16 +57,18 @@ class _SignInScreenState extends State<SignInScreen> {
     final resp = await _authService.sendEmailOtp(email, password: password);
     setState(() => _loading = false);
     
-    print('[SIGNIN] OTP response: $resp');
-    
     if (resp.containsKey('sent') && resp['sent'] == true) {
       setState(() {
         _step = 1;
         _otpSent = true;
         _showSignUpOption = false; // Reset signup option
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('OTP sent to your email! Please check the server console for the OTP code.'))
+      
+      // Show top notification for OTP sent
+      _showTopNotification(
+        'OTP Sent Successfully! 📧',
+        'Check the server console for the OTP code.',
+        Colors.green,
       );
     } else {
       final err = resp['error'] ?? 'Failed to send OTP';
@@ -79,9 +80,11 @@ class _SignInScreenState extends State<SignInScreen> {
       setState(() {
         _showSignUpOption = isUnregisteredEmail;
       });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(err.toString()))
+
+      _showTopNotification(
+        'OTP Send Failed ❌',
+        err.toString(),
+        Colors.red,
       );
     }
   }
@@ -92,8 +95,10 @@ class _SignInScreenState extends State<SignInScreen> {
     final otp = _otp.text.trim();
     
     if (otp.isEmpty || otp.length < 4) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid OTP'))
+      _showTopNotification(
+        'Invalid OTP ⚠️',
+        'Please enter a valid OTP (at least 4 digits)',
+        Colors.orange,
       );
       return;
     }
@@ -110,15 +115,27 @@ class _SignInScreenState extends State<SignInScreen> {
         final username = email.split('@')[0];
         await UserContentService.setUsername(username);
       }
-      
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => MainNavigation()),
-        (route) => false,
+
+      _showTopNotification(
+        'Login Successful ✅',
+        'Welcome back! Loading your account...',
+        Colors.green,
       );
+
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => MainNavigation()),
+            (route) => false,
+          );
+        }
+      });
     } else {
       final err = resp['error'] ?? 'Login failed. Please check your credentials and OTP.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(err.toString()))
+      _showTopNotification(
+        'Login Failed ❌',
+        err.toString(),
+        Colors.red,
       );
     }
   }
@@ -140,6 +157,73 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
+  void _showTopNotification(String title, String message, Color backgroundColor) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry overlayEntry;
+    
+    overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 0,
+        left: 0,
+        right: 0,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            color: backgroundColor,
+            padding: const EdgeInsets.fromLTRB(16, 40, 16, 16),
+            child: SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 3,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(1.5),
+                      child: LinearProgressIndicator(
+                        value: 1.0,
+                        backgroundColor: Colors.white24,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.white.withOpacity(0.7),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    
+    overlay.insert(overlayEntry);
+    
+    // Auto-dismiss after 4 seconds
+    Future.delayed(const Duration(seconds: 4), () {
+      if (overlayEntry.mounted) {
+        overlayEntry.remove();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -151,7 +235,6 @@ class _SignInScreenState extends State<SignInScreen> {
               onPressed: _goBackToCredentials,
             )
           : null,
-        actions: const [ThemeToggleWidget()],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -187,23 +270,12 @@ class _SignInScreenState extends State<SignInScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: _password,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _showPassword ? Icons.visibility : Icons.visibility_off,
-                        color: Colors.grey[600],
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _showPassword = !_showPassword;
-                        });
-                      },
-                    ),
-                    border: const OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.lock),
+                    border: OutlineInputBorder(),
                   ),
-                  obscureText: !_showPassword,
+                  obscureText: true,
                   enabled: !_loading,
                 ),
                 const SizedBox(height: 24),

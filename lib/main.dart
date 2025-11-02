@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import 'dart:io' show Platform;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'screens/chat_screen.dart';
@@ -17,17 +16,13 @@ import 'utils/app_theme.dart';
 Future<void> main() async {
   // Load environment variables (AI_API_BASE, AI_API_KEY) if present
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Only load .env on native platforms (not on web, where assets work differently)
-  // On web, .env would need to be served from the public folder differently
-  if (!kIsWeb) {
-    try {
-      await dotenv.load(fileName: '.env');
-    } catch (e) {
-      // Silently ignore - AI functionality will work without .env
-    }
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (e) {
+    // On web, .env may not be present in assets — log and continue so UI can run.
+    // AI functionality will be disabled until env is provided.
+    debugPrint('Could not load .env: $e');
   }
-  
   runApp(
     ChangeNotifierProvider(
       create: (context) => ThemeProvider(),
@@ -35,9 +30,6 @@ Future<void> main() async {
     ),
   );
 }
-
-// Check if running on web (works across all platforms)
-const kIsWeb = bool.fromEnvironment('dart.library.js_util');
 
 class LearnEaseApp extends StatelessWidget {
   const LearnEaseApp({super.key});
@@ -55,18 +47,7 @@ class LearnEaseApp extends StatelessWidget {
           routes: {
             '/chat': (ctx) => const ChatScreen(),
           },
-          // Disable all debug features to suppress DevTools errors on web
           debugShowCheckedModeBanner: false,
-          showPerformanceOverlay: false,
-          debugShowMaterialGrid: false,
-          // Performance optimizations
-          useInheritedMediaQuery: true,
-          scrollBehavior: const ScrollBehavior().copyWith(scrollbars: true),
-          // Disable widget inspector on web to prevent DevTools errors
-          builder: (context, child) {
-            // On web, return child without widget inspector
-            return child ?? const SplashScreen();
-          },
         );
       },
     );
@@ -91,15 +72,13 @@ class _MainNavigationState extends State<MainNavigation> {
   ];
 
   void _onItemTapped(int index) {
-    // Fast response - update immediately without animation delays
-    if (_selectedIndex != index) {
-      setState(() {
-        _selectedIndex = index;
-      });
-      // Play sound and haptic feedback after state update
-      SoundService.selectionHaptic();
-      SoundService.playTapSound();
-    }
+    // Play sound and haptic feedback
+    SoundService.selectionHaptic();
+    SoundService.playTapSound();
+    
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 
   @override
@@ -195,8 +174,8 @@ class _MainNavigationState extends State<MainNavigation> {
     return GestureDetector(
       onTap: () => _onItemTapped(index),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150), // Faster animation
-        curve: Curves.fastLinearToSlowEaseIn,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutBack,
         padding: EdgeInsets.symmetric(
           horizontal: isSelected ? 16 : 12,
           vertical: 10,
@@ -216,8 +195,8 @@ class _MainNavigationState extends State<MainNavigation> {
           mainAxisSize: MainAxisSize.min,
           children: [
             AnimatedScale(
-              scale: isSelected ? 1.15 : 1.0,
-              duration: const Duration(milliseconds: 120), // Faster scale
+              scale: isSelected ? 1.2 : 1.0,
+              duration: const Duration(milliseconds: 300),
               curve: Curves.easeOutBack,
               child: Icon(
                 isSelected ? activeIcon : icon,
@@ -229,7 +208,7 @@ class _MainNavigationState extends State<MainNavigation> {
             ),
             const SizedBox(height: 4),
             AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 120), // Faster text animation
+              duration: const Duration(milliseconds: 300),
               style: TextStyle(
                 fontSize: isSelected ? 12 : 11,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,

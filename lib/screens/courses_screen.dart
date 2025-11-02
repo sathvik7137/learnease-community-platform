@@ -3,10 +3,10 @@ import '../data/course_content.dart';
 import '../models/course.dart';
 import '../services/local_storage.dart';
 import '../utils/app_theme.dart';
+import '../widgets/theme_toggle_button.dart';
 import 'course_detail_screen.dart';
 import 'sign_in_screen.dart';
 import '../services/auth_service.dart';
-import '../widgets/theme_toggle_widget.dart';
 
 class CoursesScreen extends StatefulWidget {
   const CoursesScreen({super.key});
@@ -83,6 +83,11 @@ class _CoursesScreenState extends State<CoursesScreen> {
           ),
         ),
         actions: [
+          // Theme toggle
+          const ThemeToggleButton(
+            size: 24,
+            padding: EdgeInsets.only(right: 8),
+          ),
           // Refresh button moved to top right
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
@@ -93,7 +98,6 @@ class _CoursesScreenState extends State<CoursesScreen> {
               color: Colors.white,
             ),
           ),
-          const ThemeToggleWidget(),
         ],
       ),
       body: Container(

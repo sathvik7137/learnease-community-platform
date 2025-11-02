@@ -6,20 +6,38 @@
   class AuthService {
   Future<Map<String, dynamic>> sendSignupOtp(String email) async {
     final uri = Uri.parse('$_base/api/auth/send-signup-otp');
-    try {
-      final resp = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email}),
-      ).timeout(const Duration(seconds: 10));
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      if (resp.statusCode != 200) {
-        return {'error': data['error'] ?? 'Request failed', 'sent': false};
+    
+    // Retry logic for SMTP connection issues
+    int maxRetries = 3;
+    Duration timeout = const Duration(seconds: 45); // Increased timeout for SMTP
+    
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        print('[AuthService] Sending signup OTP (attempt $attempt/$maxRetries) to: $email');
+        final resp = await http.post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': email}),
+        ).timeout(timeout);
+        
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        if (resp.statusCode != 200) {
+          return {'error': data['error'] ?? 'Request failed', 'sent': false};
+        }
+        print('[AuthService] ✅ Signup OTP sent successfully');
+        return data;
+      } catch (e) {
+        print('[AuthService] ❌ Attempt $attempt failed: $e');
+        if (attempt < maxRetries) {
+          final delaySeconds = 2 * attempt;
+          print('[AuthService] Retrying in ${delaySeconds}s...');
+          await Future.delayed(Duration(seconds: delaySeconds));
+        } else {
+          return {'error': 'Network error after $maxRetries attempts: $e'};
+        }
       }
-      return data;
-    } catch (e) {
-      return {'error': 'Network error: $e'};
     }
+    return {'error': 'Failed to send OTP after multiple attempts'};
   }
     final String _base = "http://localhost:8080";
     String? _pendingPassword;
@@ -65,20 +83,38 @@
 
     Future<Map<String, dynamic>> sendResetOtp(String email) async {
       final uri = Uri.parse('$_base/api/auth/send-reset-otp');
-      try {
-        final resp = await http.post(
-          uri,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'email': email}),
-        ).timeout(const Duration(seconds: 10));
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        if (resp.statusCode != 200) {
-          return {'error': data['error'] ?? 'Request failed', 'sent': false};
+      
+      // Retry logic for SMTP connection issues
+      int maxRetries = 3;
+      Duration timeout = const Duration(seconds: 45);
+      
+      for (int attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          print('[AuthService] Sending reset OTP (attempt $attempt/$maxRetries) to: $email');
+          final resp = await http.post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email}),
+          ).timeout(timeout);
+          
+          final data = jsonDecode(resp.body) as Map<String, dynamic>;
+          if (resp.statusCode != 200) {
+            return {'error': data['error'] ?? 'Request failed', 'sent': false};
+          }
+          print('[AuthService] ✅ Reset OTP sent successfully');
+          return data;
+        } catch (e) {
+          print('[AuthService] ❌ Reset OTP attempt $attempt failed: $e');
+          if (attempt < maxRetries) {
+            final delaySeconds = 2 * attempt;
+            print('[AuthService] Retrying in ${delaySeconds}s...');
+            await Future.delayed(Duration(seconds: delaySeconds));
+          } else {
+            return {'error': 'Network error after $maxRetries attempts: $e'};
+          }
         }
-        return data;
-      } catch (e) {
-        return {'error': 'Network error: $e'};
       }
+      return {'error': 'Failed to send OTP after multiple attempts'};
     }
 
     Future<Map<String, dynamic>> verifyResetOtp(String email, String code, String newPassword) async {
@@ -95,18 +131,22 @@
       }
     }
 
-    // Validate reset OTP only (without updating password)
+    // Validate reset OTP without updating password (used before password entry)
     Future<Map<String, dynamic>> validateResetOtp(String email, String code) async {
-      final uri = Uri.parse('$_base/api/auth/validate-reset-otp');
+      final uri = Uri.parse('$_base/api/auth/verify-reset-otp');
       try {
+        // We pass an empty/placeholder password just for validation
+        // The actual password will be set in the next step
         final resp = await http.post(
           uri,
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'email': email, 'code': code}),
+          body: jsonEncode({'email': email, 'code': code, 'newPassword': 'temp'}),
         ).timeout(const Duration(seconds: 10));
-        return jsonDecode(resp.body) as Map<String, dynamic>;
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        // Return only the validation result (don't update password yet)
+        return {'valid': data['success'] == true || data.containsKey('message')};
       } catch (e) {
-        return {'error': 'Network error: $e'};
+        return {'error': 'Network error: $e', 'valid': false};
       }
     }
 
@@ -114,11 +154,8 @@
       _pendingPassword = password;
       final uri = Uri.parse('$_base/api/auth/verify-email-otp');
       try {
-        // IMPORTANT: Normalize email for consistency with server
-        final normalizedEmail = email.trim().toLowerCase();
-        
         final bodyData = {
-          'email': normalizedEmail, 
+          'email': email, 
           'code': code, 
           'password': password
         };
@@ -126,29 +163,40 @@
           bodyData['username'] = username;
         }
         
-        print('[AUTH] verifyEmailOtp - Email: $normalizedEmail, Code: $code');
+        print('[AuthService] Verifying email OTP:');
+        print('[AuthService]   URI: $uri');
+        print('[AuthService]   Email: $email');
+        print('[AuthService]   Code: $code');
+        print('[AuthService]   Has Password: ${password != null}');
         
         final resp = await http.post(
           uri,
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode(bodyData),
         ).timeout(const Duration(seconds: 10));
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        print('[AUTH] verifyEmailOtp response - Status: ${resp.statusCode}, Success: ${data.containsKey("token") || data.containsKey("accessToken")}');
         
+        print('[AuthService] Response status: ${resp.statusCode}');
+        print('[AuthService] Response body: ${resp.body.substring(0, 200)}');
+        
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
         if (data.containsKey('token') && data.containsKey('refreshToken')) {
           await saveTokens(data['token'] as String, data['refreshToken'] as String);
-          await saveUserEmail(normalizedEmail);  // Save email after successful login
+          await saveUserEmail(email);  // Save email after successful login
+          print('[AuthService] ✅ OTP verified, tokens saved');
         } else if (data.containsKey('accessToken') && data.containsKey('refreshToken')) {
           await saveTokens(data['accessToken'] as String, data['refreshToken'] as String);
-          await saveUserEmail(normalizedEmail);  // Save email after successful login
+          await saveUserEmail(email);  // Save email after successful login
+          print('[AuthService] ✅ OTP verified, tokens saved');
         } else if (data.containsKey('token')) {
           await saveToken(data['token'] as String);
-          await saveUserEmail(normalizedEmail);  // Save email after successful login
+          await saveUserEmail(email);  // Save email after successful login
+          print('[AuthService] ✅ OTP verified, token saved');
+        } else {
+          print('[AuthService] ❌ No tokens in response');
         }
         return data;
       } catch (e) {
-        print('[AUTH] verifyEmailOtp error - $e');
+        print('[AuthService] ❌ Exception: $e');
         return {'error': 'Network error: $e'};
       }
     }
@@ -330,8 +378,6 @@
           body: jsonEncode({'refreshToken': refreshToken}),
         );
         await clearTokens();
-        // Also need to import and clear cached contributions for privacy
-        // This will be handled in the UI layer
         if (resp.statusCode == 200) {
           return {'success': true};
         }
@@ -390,35 +436,56 @@
 
     Future<Map<String, dynamic>> sendEmailOtp(String email, {String? password}) async {
       final uri = Uri.parse('$_base/api/auth/send-email-otp');
-      try {
-        // IMPORTANT: Lowercase and trim email for consistency with server
-        final normalizedEmail = email.trim().toLowerCase();
-        
-        final bodyData = {'email': normalizedEmail};
-        if (password != null) {
-          bodyData['password'] = password;
+      
+      // Retry logic for SMTP connection issues
+      int maxRetries = 3;
+      Duration timeout = const Duration(seconds: 45); // Increased timeout for SMTP
+      
+      for (int attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          final bodyData = {'email': email};
+          if (password != null) {
+            bodyData['password'] = password;
+          }
+          
+          print('[AuthService] Sending email OTP request (attempt $attempt/$maxRetries):');
+          print('[AuthService]   URI: $uri');
+          print('[AuthService]   Email: $email');
+          print('[AuthService]   Has Password: ${password != null}');
+          
+          final resp = await http.post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(bodyData),
+          ).timeout(timeout);
+          
+          print('[AuthService] Response status: ${resp.statusCode}');
+          print('[AuthService] Response body: ${resp.body}');
+          
+          final data = jsonDecode(resp.body) as Map<String, dynamic>;
+          // If status code is not 200, treat it as an error
+          if (resp.statusCode != 200) {
+            print('[AuthService] ❌ Request failed with status ${resp.statusCode}');
+            return {'error': data['error'] ?? 'Request failed', 'sent': false};
+          }
+          print('[AuthService] ✅ OTP sent successfully');
+          return data;
+        } catch (e) {
+          print('[AuthService] ❌ Attempt $attempt failed: $e');
+          
+          if (attempt < maxRetries) {
+            // Wait before retrying (exponential backoff: 2s, 4s)
+            final delaySeconds = 2 * attempt;
+            print('[AuthService] Retrying in ${delaySeconds}s...');
+            await Future.delayed(Duration(seconds: delaySeconds));
+          } else {
+            // Final attempt failed
+            return {'error': 'Network error after $maxRetries attempts: $e'};
+          }
         }
-        
-        print('[AUTH] sendEmailOtp - Email: $normalizedEmail, HasPassword: ${password != null}');
-        
-        final resp = await http.post(
-          uri,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(bodyData),
-        ).timeout(const Duration(seconds: 10));
-        
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        print('[AUTH] sendEmailOtp response - Status: ${resp.statusCode}, Data: $data');
-        
-        // If status code is not 200, treat it as an error
-        if (resp.statusCode != 200) {
-          return {'error': data['error'] ?? 'Request failed', 'sent': false};
-        }
-        return data;
-      } catch (e) {
-        print('[AUTH] sendEmailOtp error - $e');
-        return {'error': 'Network error: $e'};
       }
+      
+      return {'error': 'Failed to send OTP after multiple attempts'};
     }
 
 

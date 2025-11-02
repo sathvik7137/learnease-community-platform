@@ -6,10 +6,10 @@ import '../services/local_storage.dart';
 import '../services/community_integration_service.dart';
 import '../services/auth_service.dart';
 import '../utils/app_theme.dart';
+import '../widgets/theme_toggle_button.dart';
 import 'quiz_screen.dart';
 import 'fill_blanks_screen.dart';
 import 'community_contributions_screen.dart';
-import '../widgets/theme_toggle_widget.dart';
 import 'sign_in_screen.dart';
 
 class QuizTestScreen extends StatefulWidget {
@@ -243,7 +243,12 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
           title: const Text('Quiz & Tests'),
           backgroundColor: colors.primary,
           foregroundColor: Colors.white,
-          actions: const [ThemeToggleWidget()],
+          actions: const [
+            ThemeToggleButton(
+              size: 24,
+              padding: EdgeInsets.only(right: 16),
+            ),
+          ],
           bottom: const TabBar(
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
