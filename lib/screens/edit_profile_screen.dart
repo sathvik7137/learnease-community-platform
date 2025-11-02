@@ -19,15 +19,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   bool _isLoading = false;
+  bool _hasChanges = false;
 
   @override
   void initState() {
     super.initState();
     _usernameController.text = widget.currentUsername;
+    _usernameController.addListener(_checkForChanges);
+  }
+
+  void _checkForChanges() {
+    setState(() {
+      _hasChanges = _usernameController.text.trim() != widget.currentUsername;
+    });
   }
 
   @override
   void dispose() {
+    _usernameController.removeListener(_checkForChanges);
     _usernameController.dispose();
     super.dispose();
   }
@@ -133,127 +142,210 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             child: Form(
               key: _formKey,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Profile Icon
+                  // Profile Picture with Edit Button
                   Center(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.indigo.withOpacity(0.4),
-                            blurRadius: 15,
-                            spreadRadius: 3,
+                    child: Stack(
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.indigo.withOpacity(0.4),
+                                blurRadius: 15,
+                                spreadRadius: 3,
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      child: CircleAvatar(
-                        radius: 50,
-                        backgroundColor: Colors.indigo.shade100,
-                        child: Icon(
-                          Icons.person,
-                          size: 60,
-                          color: Colors.indigo,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Email (Read-only)
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Email',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey.shade600,
+                          child: CircleAvatar(
+                            radius: 50,
+                            backgroundColor: Colors.indigo.shade100,
+                            child: Icon(
+                              Icons.person,
+                              size: 60,
+                              color: Colors.indigo,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Row(
+                        ),
+                        // Camera Icon Button (Bottom-Right)
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.indigo,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.indigo.withOpacity(0.5),
+                                  blurRadius: 8,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                            child: IconButton(
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Photo upload coming soon!'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                              padding: const EdgeInsets.all(8),
+                              constraints: const BoxConstraints(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+
+                  // Email Field (Read-only/Disabled)
+                  SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Email',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade600,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.grey.shade300,
+                              width: 1,
+                            ),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          child: Row(
                             children: [
-                              Icon(Icons.email, color: Colors.indigo, size: 20),
+                              Icon(
+                                Icons.email,
+                                color: Colors.grey.shade500,
+                                size: 20,
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
                                   widget.email,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 16,
-                                    color: Colors.black87,
+                                    color: Colors.grey.shade700,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Username field
-                  Text(
-                    'Username',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.indigo.shade900,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: TextFormField(
-                        controller: _usernameController,
-                        enabled: !_isLoading,
-                        decoration: InputDecoration(
-                          hintText: 'Enter your username',
-                          border: InputBorder.none,
-                          prefixIcon: Icon(Icons.person_outline, color: Colors.indigo),
                         ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Username cannot be empty';
-                          }
-                          if (value.trim().length < 3) {
-                            return 'Username must be at least 3 characters';
-                          }
-                          return null;
-                        },
-                      ),
+                        const SizedBox(height: 4),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Text(
+                            '(Cannot be changed)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Username Field (Editable)
+                  SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Username',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.indigo.shade900,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.indigo.shade300,
+                              width: 2,
+                            ),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: TextFormField(
+                            controller: _usernameController,
+                            enabled: !_isLoading,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black87,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Enter your username',
+                              hintStyle: TextStyle(
+                                color: Colors.grey.shade400,
+                                fontSize: 15,
+                              ),
+                              border: InputBorder.none,
+                              prefixIcon: Icon(
+                                Icons.person_outline,
+                                color: Colors.indigo.shade600,
+                              ),
+                              prefixIconConstraints: const BoxConstraints(minWidth: 45, minHeight: 45),
+                              contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Username cannot be empty';
+                              }
+                              if (value.trim().length < 3) {
+                                return 'Username must be at least 3 characters';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 32),
 
-                  // Save button
+                  // Save Button (Smart - only enabled when changes made)
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _saveProfile,
+                      onPressed: (_isLoading || !_hasChanges) ? null : _saveProfile,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.indigo,
+                        backgroundColor: (_hasChanges && !_isLoading) ? Colors.indigo : Colors.grey.shade400,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        elevation: 6,
+                        elevation: (_hasChanges && !_isLoading) ? 6 : 2,
                         shadowColor: Colors.indigo.withOpacity(0.5),
                       ),
                       child: _isLoading
@@ -265,9 +357,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 strokeWidth: 2,
                               ),
                             )
-                          : const Text(
-                              'Save Changes',
-                              style: TextStyle(
+                          : Text(
+                              _hasChanges ? 'Save Changes' : 'No Changes',
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -277,28 +369,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
                   const SizedBox(height: 16),
 
-                  // Info message
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Your username will be visible to other users in the community.',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.blue.shade700,
+                  // Info Message (Same width as button)
+                  SizedBox(
+                    width: double.infinity,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Colors.blue.shade200,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: Colors.blue.shade700,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Your username will be visible to other users in the community.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.blue.shade700,
+                                height: 1.4,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
