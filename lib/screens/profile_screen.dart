@@ -7,6 +7,7 @@ import '../providers/theme_provider.dart';
 import 'sign_in_screen.dart';
 import 'sign_up_screen.dart';
 import 'edit_profile_screen.dart';
+import 'settings_screen.dart';
 import '../widgets/theme_toggle_widget.dart';
 import 'package:provider/provider.dart';
 
@@ -146,105 +147,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(100),
-        child: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF5C6BC0), Color(0xFF7E57C2)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Color(0xFF5C6BC0),
-                blurRadius: 12,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              AppBar(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                title: const Text(
-                  'Profile & Progress',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                actions: [
-                  Consumer<ThemeProvider>(
-                    builder: (context, themeProvider, child) {
-                      return IconButton(
-                        icon: Icon(
-                          themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                        onPressed: () {
-                          themeProvider.toggleTheme();
-                        },
-                        tooltip: themeProvider.isDarkMode ? 'Light Mode' : 'Dark Mode',
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    Expanded(
-                      child: Center(
-                        child: Text(
-                          'Overview',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Center(
-                        child: Text(
-                          'Progress',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Center(
-                        child: Text(
-                          'Achievements',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
       body: Container(
         decoration: BoxDecoration(
           color: isDark ? Colors.grey.shade900 : Colors.grey.shade50,
@@ -683,6 +585,35 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     ),
                     SizedBox(height: 12),
                     
+                    // Settings button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(0xFF5C6BC0),
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SettingsScreen(
+                                userEmail: _userEmail,
+                                username: _username,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: Icon(Icons.settings),
+                        label: Text('Settings'),
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
@@ -728,30 +659,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 ),
 
               SizedBox(height: 16),
-              
-              // Settings coming soon message
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.indigo.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.settings, color: Colors.indigo),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'More settings coming soon!',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
         ),

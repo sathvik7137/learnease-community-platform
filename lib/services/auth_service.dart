@@ -133,19 +133,24 @@
 
     // Validate reset OTP without updating password (used before password entry)
     Future<Map<String, dynamic>> validateResetOtp(String email, String code) async {
-      final uri = Uri.parse('$_base/api/auth/verify-reset-otp');
+      final uri = Uri.parse('$_base/api/auth/validate-reset-otp');
       try {
-        // We pass an empty/placeholder password just for validation
-        // The actual password will be set in the next step
+        print('[AuthService] Validating reset OTP for: $email, code: $code');
         final resp = await http.post(
           uri,
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'email': email, 'code': code, 'newPassword': 'temp'}),
+          body: jsonEncode({'email': email, 'code': code}),
         ).timeout(const Duration(seconds: 10));
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        // Return only the validation result (don't update password yet)
-        return {'valid': data['success'] == true || data.containsKey('message')};
+        print('[AuthService] OTP validation response: ${resp.statusCode} - $data');
+        if (resp.statusCode == 200) {
+          return {'valid': true};
+        } else {
+          final error = data['error'] ?? 'OTP validation failed';
+          return {'error': error, 'valid': false};
+        }
       } catch (e) {
+        print('[AuthService] OTP validation error: $e');
         return {'error': 'Network error: $e', 'valid': false};
       }
     }

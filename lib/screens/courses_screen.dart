@@ -19,6 +19,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
   // Map to store course progress
   final Map<String, double> courseProgress = {};
   bool isLoading = true;
+  String searchQuery = '';
   
   @override
   void initState() {
@@ -61,45 +62,6 @@ class _CoursesScreenState extends State<CoursesScreen> {
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        elevation: 4,
-        shadowColor: colors.primary.withOpacity(0.5),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [colors.primary, colors.secondary],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-        title: const Text(
-          'Courses',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
-            color: Colors.white,
-          ),
-        ),
-        actions: [
-          // Theme toggle
-          const ThemeToggleButton(
-            size: 24,
-            padding: EdgeInsets.only(right: 8),
-          ),
-          // Refresh button moved to top right
-          Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: IconButton(
-              icon: const Icon(Icons.refresh_rounded, size: 28),
-              tooltip: 'Refresh Progress',
-              onPressed: _loadCourseProgress,
-              color: Colors.white,
-            ),
-          ),
-        ],
-      ),
       body: Container(
         // Gradient background
         decoration: BoxDecoration(
@@ -117,43 +79,80 @@ class _CoursesScreenState extends State<CoursesScreen> {
             end: Alignment.bottomCenter,
           ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Available Courses',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: colors.onSurface,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () async {
-                    await _loadCourseProgress();
-                    return;
-                  },
-                  child: ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 100), // Space for floating nav
-                    itemCount: courses.length,
-                    itemBuilder: (context, index) {
-                      final course = courses[index];
-                      return _buildCourseCard(course, context);
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Search bar
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.primary.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: TextField(
+                    onChanged: (value) {
+                      setState(() {
+                        searchQuery = value.toLowerCase();
+                      });
                     },
+                    decoration: InputDecoration(
+                      hintText: 'Search courses...',
+                      prefixIcon: Icon(Icons.search, color: colors.primary),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: isDark ? colors.surface : Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                    style: TextStyle(color: colors.onSurface),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 20),
+                
+                // Courses list
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () async {
+                      await _loadCourseProgress();
+                      return;
+                    },
+                    child: ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 100), // Space for floating nav
+                      itemCount: _filteredCourses().length,
+                      itemBuilder: (context, index) {
+                        final course = _filteredCourses()[index];
+                        return _buildCourseCard(course, context);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-  
+  List<Course> _filteredCourses() {
+    if (searchQuery.isEmpty) {
+      return courses;
+    }
+    return courses.where((course) {
+      return course.name.toLowerCase().contains(searchQuery) ||
+          course.description.toLowerCase().contains(searchQuery);
+    }).toList();
+  }
+
   Widget _buildCourseCard(Course course, BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final colors = Theme.of(context).colorScheme;

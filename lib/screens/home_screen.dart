@@ -698,16 +698,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: const [
-          ThemeToggleButton(
-            size: 26,
-            padding: EdgeInsets.only(right: 16),
-          ),
-        ],
-      ),
       body: Stack(
         children: [
           // Main content with enhanced gradient background

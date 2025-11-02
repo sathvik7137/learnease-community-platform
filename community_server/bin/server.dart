@@ -921,6 +921,48 @@ void main(List<String> args) async {
     }
   });
 
+  // Validate reset OTP without changing password (used before user enters new password)
+  router.post('/api/auth/validate-reset-otp', (Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      final email = (data['email'] as String?)?.trim().toLowerCase();
+      final code = data['code'] as String?;
+      print('[VALIDATE RESET OTP] Checking: email=$email, code=$code');
+      
+      if (email == null || code == null) {
+        return Response(400, body: jsonEncode({'error': 'Missing email or code'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      final record = _dbGetEmailOtp(email);
+      print('[VALIDATE RESET OTP] 🔍 Looking up OTP for "$email"');
+      if (record == null) {
+        return Response(400, body: jsonEncode({'error': 'No OTP requested for this email'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      // Check expiry
+      final expires = DateTime.parse(record['expiresAt'] as String);
+      if (DateTime.now().isAfter(expires)) {
+        print('[VALIDATE RESET OTP] ⏰ OTP expired');
+        return Response(400, body: jsonEncode({'error': 'OTP has expired'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      // Check code match
+      if (record['code'] != code) {
+        print('[VALIDATE RESET OTP] ❌ Code mismatch. Expected: ${record['code']}, Got: $code');
+        final attempts = (record['attempts'] as int? ?? 0) + 1;
+        _dbSaveEmailOtp(email, record['code'] as String, record['expiresAt'] as String, attempts);
+        return Response(401, body: jsonEncode({'error': 'Invalid OTP code'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      print('[VALIDATE RESET OTP] ✅ OTP is valid');
+      return Response.ok(jsonEncode({'valid': true}), headers: {'Content-Type': 'application/json'});
+    } catch (e) {
+      print('[VALIDATE RESET OTP] Exception: $e');
+      return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
+    }
+  });
+
   router.post('/api/auth/verify-otp', (Request request) async {
     try {
       final body = await request.readAsString();

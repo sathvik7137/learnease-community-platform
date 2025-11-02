@@ -6,7 +6,6 @@ import '../services/local_storage.dart';
 import '../services/community_integration_service.dart';
 import '../services/auth_service.dart';
 import '../utils/app_theme.dart';
-import '../widgets/theme_toggle_button.dart';
 import 'quiz_screen.dart';
 import 'fill_blanks_screen.dart';
 import 'community_contributions_screen.dart';
@@ -239,25 +238,42 @@ class _QuizTestScreenState extends State<QuizTestScreen> {
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Quiz & Tests'),
-          backgroundColor: colors.primary,
-          foregroundColor: Colors.white,
-          actions: const [
-            ThemeToggleButton(
-              size: 24,
-              padding: EdgeInsets.only(right: 16),
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(64),
+          child: Container(
+            color: isDark ? const Color(0xFF121212) : Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colors.primary.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: TabBar(
+                  tabs: const [
+                    Tab(text: 'Quizzes'),
+                    Tab(text: 'Mock Tests'),
+                    Tab(text: 'Fill Blanks'),
+                  ],
+                  indicator: UnderlineTabIndicator(
+                    borderSide: BorderSide(
+                      color: colors.primary,
+                      width: 3.0,
+                    ),
+                  ),
+                  labelColor: colors.primary,
+                  unselectedLabelColor: colors.onSurface.withOpacity(0.5),
+                  dividerColor: colors.outline,
+                ),
+              ),
             ),
-          ],
-          bottom: const TabBar(
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            indicatorColor: Colors.white,
-            tabs: [
-              Tab(text: 'Quizzes'),
-              Tab(text: 'Mock Tests'),
-              Tab(text: 'Fill Blanks'),
-            ],
           ),
         ),
         body: isLoading

@@ -4,9 +4,7 @@ import '../models/user_content.dart';
 import '../services/user_content_service.dart';
 import '../services/auth_service.dart';
 import '../utils/app_theme.dart';
-import '../widgets/theme_toggle_button.dart';
 import 'add_content_screen.dart';
-import 'my_contributions_screen.dart';
 import 'sign_in_screen.dart';
 import 'dart:async';
 
@@ -193,128 +191,42 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(140),
+        preferredSize: const Size.fromHeight(64),
         child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFF5C6BC0),
-                const Color(0xFF7E57C2),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF5C6BC0).withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            title: FutureBuilder<String?>(
-              future: UserContentService.getUsername(),
-              builder: (context, snapshot) {
-                final username = snapshot.data;
-                final categoryName = _tabController.index == 0 ? 'Java' : 'DBMS';
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Community Contributions',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      categoryName,
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 11,
-                        fontWeight: FontWeight.normal,
-                      ),
-                    ),
-                    if (username != null)
-                      Text(
-                        'Logged in as: $username',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.normal,
-                          color: Colors.white60,
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-            actions: [
-              // Theme toggle
-              const ThemeToggleButton(
-                size: 24,
-                padding: EdgeInsets.only(right: 8),
-              ),
-              // Add Content Button - prominently displayed in app bar
-              ElevatedButton.icon(
-                onPressed: _handleAddContentPress,
-                icon: const Icon(Icons.add),
-                label: const Text('Add Content'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  elevation: 4,
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.person),
-                tooltip: 'My Contributions',
-                onPressed: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const MyContributionsScreen(),
-                    ),
-                  );
-                  _loadContributions();
-                },
-              ),
-              PopupMenuButton<ContentType?>(
-                icon: const Icon(Icons.filter_list),
-                tooltip: 'Filter by type',
-                onSelected: (type) {
-                  setState(() {
-                    _filterType = type;
-                  });
-                  _loadContributions();
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(value: null, child: Text('All Types')),
-                  ...ContentType.values.map((type) => PopupMenuItem(
-                    value: type,
-                    child: Text(_getTypeLabel(type)),
-                  )),
+          color: isDark ? const Color(0xFF121212) : Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: colors.primary.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
                 ],
               ),
-            ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(48),
               child: TabBar(
                 controller: _tabController,
                 tabs: const [
-                  Tab(icon: Icon(Icons.code), text: 'Java'),
-                  Tab(icon: Icon(Icons.storage), text: 'DBMS'),
+                  Tab(text: 'Java'),
+                  Tab(text: 'DBMS'),
                 ],
-                indicatorColor: Colors.white,
-                labelColor: Colors.white,
+                indicator: UnderlineTabIndicator(
+                  borderSide: BorderSide(
+                    color: colors.primary,
+                    width: 3.0,
+                  ),
+                ),
+                labelColor: colors.primary,
+                unselectedLabelColor: colors.onSurface.withOpacity(0.5),
+                dividerColor: colors.outline,
               ),
             ),
           ),
@@ -341,6 +253,12 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
                     },
                   ),
                 ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _handleAddContentPress,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Content'),
+        tooltip: 'Add Content',
+      ),
     );
   }
 

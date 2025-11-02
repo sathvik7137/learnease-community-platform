@@ -19,7 +19,7 @@ void main() async {
   if (loginResp.statusCode == 200) {
     print('✅ PASSED: Direct login works');
     final data = jsonDecode(loginResp.body);
-    print('   Token: +"${(data['token'] as String).substring(0, 30)}"+"...');
+    print('   Token: ${(data['token'] as String).substring(0, 30)}...');
   } else {
     print('❌ FAILED: Status +"${loginResp.statusCode}"+"'');
   }
@@ -45,7 +45,7 @@ void main() async {
     if (verifyResp.statusCode == 200) {
       print('✅ PASSED: OTP verification successful');
       final verifyData = jsonDecode(verifyResp.body);
-      print('   Token received: +"${verifyData.containsKey('token') || verifyData.containsKey('accessToken')}"+"');
+      print('   Token received: ${verifyData.containsKey('token') || verifyData.containsKey('accessToken')}');
     } else {
       print('❌ FAILED: Status +"${verifyResp.statusCode}"+"'');
       print('   Response: +"${verifyResp.body}"+"');

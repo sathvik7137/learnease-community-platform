@@ -12,6 +12,7 @@ import 'screens/community_contributions_screen.dart';
 import 'services/sound_service.dart';
 import 'providers/theme_provider.dart';
 import 'utils/app_theme.dart';
+import 'widgets/theme_toggle_button.dart';
 
 Future<void> main() async {
   // Load environment variables (AI_API_BASE, AI_API_KEY) if present
@@ -87,8 +88,46 @@ class _MainNavigationState extends State<MainNavigation> {
     final colors = Theme.of(context).colorScheme;
     
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Row(
+          children: [
+            Image.asset(
+              'assets/images/logo.png',
+              width: 32,
+              height: 32,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [colors.primary, colors.secondary],
+                    ),
+                  ),
+                  child: const Icon(Icons.school, size: 16, color: Colors.white),
+                );
+              },
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'LearnEase',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: colors.onSurface,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ThemeToggleButton(size: 26, padding: EdgeInsets.only(right: 16)),
+        ],
+      ),
       body: _screens[_selectedIndex],
-      extendBody: true, // Allows body to extend behind the bottom nav
+      extendBody: false,
       bottomNavigationBar: Container(
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
@@ -151,14 +190,14 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
         ),
       ),
-      // Small floating chat button positioned slightly above the bottom nav
       floatingActionButton: Container(
-        margin: const EdgeInsets.only(bottom: 32.0, right: 14.0),
+        margin: const EdgeInsets.only(bottom: 90.0, right: 20.0),
         child: FloatingActionButton.small(
           onPressed: () {
             Navigator.of(context).pushNamed('/chat');
           },
           foregroundColor: Colors.white,
+          tooltip: 'Chat & Community',
           child: const Icon(Icons.chat_bubble_outline),
         ),
       ),

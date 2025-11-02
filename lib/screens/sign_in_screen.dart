@@ -4,6 +4,8 @@ import '../services/user_content_service.dart';
 import '../main.dart';
 import 'forgot_password_screen.dart';
 import 'sign_up_screen.dart';
+import '../widgets/dynamic_notification.dart';
+import '../widgets/password_input_field.dart';
 
 class SignInScreen extends StatefulWidget {
   final String? initialEmail;
@@ -36,20 +38,12 @@ class _SignInScreenState extends State<SignInScreen> {
     final password = _password.text;
     
     if (email.isEmpty || !email.contains('@')) {
-      _showTopNotification(
-        'Invalid Email ⚠️',
-        'Please enter a valid email address',
-        Colors.orange,
-      );
+      _showNotification('Invalid email address');
       return;
     }
     
     if (password.isEmpty || password.length < 6) {
-      _showTopNotification(
-        'Weak Password ⚠️',
-        'Password must be at least 6 characters',
-        Colors.orange,
-      );
+      _showNotification('Password must be at least 6 characters');
       return;
     }
     
@@ -61,19 +55,12 @@ class _SignInScreenState extends State<SignInScreen> {
       setState(() {
         _step = 1;
         _otpSent = true;
-        _showSignUpOption = false; // Reset signup option
+        _showSignUpOption = false;
       });
       
-      // Show top notification for OTP sent
-      _showTopNotification(
-        'OTP Sent Successfully! 📧',
-        'Check the server console for the OTP code.',
-        Colors.green,
-      );
+      _showNotification('OTP sent to your email', isSuccess: true);
     } else {
       final err = resp['error'] ?? 'Failed to send OTP';
-      
-      // Check if error indicates unregistered email
       final isUnregisteredEmail = err.toString().toLowerCase().contains('invalid credentials') ||
                                  err.toString().toLowerCase().contains('check your email');
       
@@ -81,11 +68,7 @@ class _SignInScreenState extends State<SignInScreen> {
         _showSignUpOption = isUnregisteredEmail;
       });
 
-      _showTopNotification(
-        'OTP Send Failed ❌',
-        err.toString(),
-        Colors.red,
-      );
+      _showNotification(err.toString(), isSuccess: false);
     }
   }
 
@@ -95,11 +78,7 @@ class _SignInScreenState extends State<SignInScreen> {
     final otp = _otp.text.trim();
     
     if (otp.isEmpty || otp.length < 4) {
-      _showTopNotification(
-        'Invalid OTP ⚠️',
-        'Please enter a valid OTP (at least 4 digits)',
-        Colors.orange,
-      );
+      _showNotification('Please enter a valid OTP');
       return;
     }
     
@@ -116,11 +95,7 @@ class _SignInScreenState extends State<SignInScreen> {
         await UserContentService.setUsername(username);
       }
 
-      _showTopNotification(
-        'Login Successful ✅',
-        'Welcome back! Loading your account...',
-        Colors.green,
-      );
+      _showNotification('Login successful! Welcome back', isSuccess: true);
 
       Future.delayed(const Duration(milliseconds: 1500), () {
         if (mounted) {
@@ -132,11 +107,7 @@ class _SignInScreenState extends State<SignInScreen> {
       });
     } else {
       final err = resp['error'] ?? 'Login failed. Please check your credentials and OTP.';
-      _showTopNotification(
-        'Login Failed ❌',
-        err.toString(),
-        Colors.red,
-      );
+      _showNotification(err.toString(), isSuccess: false);
     }
   }
 
@@ -157,71 +128,13 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
-  void _showTopNotification(String title, String message, Color backgroundColor) {
-    final overlay = Overlay.of(context);
-    late OverlayEntry overlayEntry;
-    
-    overlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        top: 0,
-        left: 0,
-        right: 0,
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            color: backgroundColor,
-            padding: const EdgeInsets.fromLTRB(16, 40, 16, 16),
-            child: SafeArea(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    message,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 3,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(1.5),
-                      child: LinearProgressIndicator(
-                        value: 1.0,
-                        backgroundColor: Colors.white24,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Colors.white.withOpacity(0.7),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+  void _showNotification(String message, {bool isSuccess = false}) {
+    showDynamicNotification(
+      context,
+      message: message,
+      isSuccess: isSuccess,
+      duration: const Duration(seconds: 3),
     );
-    
-    overlay.insert(overlayEntry);
-    
-    // Auto-dismiss after 4 seconds
-    Future.delayed(const Duration(seconds: 4), () {
-      if (overlayEntry.mounted) {
-        overlayEntry.remove();
-      }
-    });
   }
 
   @override
@@ -268,15 +181,10 @@ class _SignInScreenState extends State<SignInScreen> {
                   keyboardType: TextInputType.emailAddress,
                 ),
                 const SizedBox(height: 16),
-                TextField(
+                PasswordInputField(
                   controller: _password,
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: Icon(Icons.lock),
-                    border: OutlineInputBorder(),
-                  ),
-                  obscureText: true,
-                  enabled: !_loading,
+                  labelText: 'Password',
+                  hintText: 'Enter your password',
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(

@@ -3,6 +3,8 @@ import '../services/auth_service.dart';
 import '../services/user_content_service.dart';
 import '../widgets/username_setup_dialog.dart';
 import '../widgets/theme_toggle_widget.dart';
+import '../widgets/dynamic_notification.dart';
+import '../widgets/password_input_field.dart';
 import 'otp_verify_screen.dart';
 import 'sign_in_screen.dart';
 
@@ -34,6 +36,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
+  void _showNotification(String message, {bool isSuccess = true}) {
+    showDynamicNotification(
+      context,
+      message: message,
+      isSuccess: isSuccess,
+      duration: const Duration(seconds: 3),
+    );
+  }
+
   void _validateAndSendOtp() async {
     setState(() => _loading = true);
     
@@ -44,19 +55,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
     // Validation
     if (email.isEmpty || username.isEmpty || password.isEmpty) {
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('All fields are required')));
+      _showNotification('All fields are required', isSuccess: false);
       return;
     }
     
     if (!email.contains('@')) {
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a valid email address')));
+      _showNotification('Please enter a valid email address', isSuccess: false);
       return;
     }
     
     if (password.length < 6) {
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password must be at least 6 characters')));
+      _showNotification('Password must be at least 6 characters', isSuccess: false);
       return;
     }
     
@@ -67,7 +78,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         _loading = false;
         _emailTaken = true;
       });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Email is already registered')));
+      _showNotification('Email is already registered', isSuccess: false);
       return;
     }
     
@@ -75,7 +86,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final usernameTaken = await UserContentService.isUsernameTaken(username);
     if (usernameTaken) {
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Username is already taken. Please choose another.')));
+      _showNotification('Username is already taken. Please choose another.', isSuccess: false);
       return;
     }
     
@@ -85,10 +96,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
     
     if (otpResp['sent'] == true) {
       setState(() => _step = 1);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('OTP sent to your email! Please check the server console for the OTP code.')));
+      _showNotification('OTP sent to your email! Please check the server console for the OTP code.', isSuccess: true);
     } else {
       final err = otpResp['error'] ?? 'Failed to send OTP';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err.toString())));
+      _showNotification(err.toString(), isSuccess: false);
     }
   }
 
@@ -99,7 +110,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final otp = _otp.text.trim();
     
     if (otp.isEmpty || otp.length < 4) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a valid OTP')));
+      _showNotification('Please enter a valid OTP', isSuccess: false);
       return;
     }
     
@@ -110,14 +121,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
     if (verifyResp.containsKey('token') || verifyResp.containsKey('accessToken')) {
       // Save username locally as well
       await UserContentService.setUsername(username);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Registration successful!')));
+      _showNotification('Registration successful!', isSuccess: true);
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => SignInScreen(initialEmail: email)),
         (route) => false,
       );
     } else {
       final err = verifyResp['error'] ?? 'Registration failed. Please check your OTP.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err.toString())));
+      _showNotification(err.toString(), isSuccess: false);
     }
   }
 
@@ -253,15 +264,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     ),
                   ),
                 const SizedBox(height: 16),
-                TextField(
+                PasswordInputField(
                   controller: _password,
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: Icon(Icons.lock),
-                    border: OutlineInputBorder(),
-                  ),
-                  obscureText: true,
-                  enabled: !_loading,
+                  labelText: 'Password',
+                  hintText: 'Enter your password (min 6 characters)',
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(

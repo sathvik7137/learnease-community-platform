@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
+import '../widgets/dynamic_notification.dart';
+import '../widgets/password_input_field.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({Key? key}) : super(key: key);
@@ -13,15 +15,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   int _step = 0; // 0: email, 1: otp, 2: new password, 3: success
   String? _errorMsg;
   bool _showError = false;
-  void _showErrorMsg(String msg) {
-    setState(() {
-      _errorMsg = msg;
-      _showError = true;
-    });
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _showError = false);
-    });
+  
+  void _showNotification(String message, {bool isSuccess = true}) {
+    showDynamicNotification(
+      context,
+      message: message,
+      isSuccess: isSuccess,
+      duration: const Duration(seconds: 3),
+    );
   }
+  
   final _emailCtrl = TextEditingController();
   final _otpCtrl = TextEditingController();
   final _newPasswordCtrl = TextEditingController();
@@ -36,7 +39,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   void _sendOtp() async {
     final email = _emailCtrl.text.trim();
     if (email.isEmpty || !email.contains('@')) {
-      _showErrorMsg('Please enter a valid email');
+      _showNotification('Please enter a valid email', isSuccess: false);
       return;
     }
     setState(() => _loading = true);
@@ -49,7 +52,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       setState(() => _step = 1);
     } else {
       final err = resp['error'] ?? 'Failed to send OTP';
-      _showErrorMsg(err.toString());
+      _showNotification(err.toString(), isSuccess: false);
     }
   }
 
@@ -58,7 +61,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final otp = _otpCtrl.text.trim();
     final newPassword = _newPasswordCtrl.text;
     if (otp.isEmpty || newPassword.length < 6) {
-      _showErrorMsg('Enter valid OTP and password (min 6 chars)');
+      _showNotification('Enter valid OTP and password (min 6 chars)', isSuccess: false);
       return;
     }
     setState(() => _loading = true);
@@ -71,7 +74,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       });
     } else {
       final err = resp['error'] ?? 'Reset failed';
-      _showErrorMsg(err.toString());
+      _showNotification(err.toString(), isSuccess: false);
     }
   }
 
@@ -79,19 +82,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final email = _emailCtrl.text.trim();
     final otp = _otpCtrl.text.trim();
     if (otp.isEmpty) {
-      _showErrorMsg('Please enter the OTP');
+      _showNotification('Please enter the OTP', isSuccess: false);
       return;
     }
     setState(() => _loading = true);
-    // Validate OTP first before proceeding to password step
+    // Validate OTP before proceeding to password step
     final resp = await _authService.validateResetOtp(email, otp);
     setState(() => _loading = false);
     if (resp['valid'] == true) {
       // OTP is valid, proceed to password entry
       setState(() => _step = 2);
+      _showNotification('OTP verified! Enter your new password', isSuccess: true);
     } else {
       final err = resp['error'] ?? 'OTP verification failed';
-      _showErrorMsg(err.toString());
+      _showNotification(err.toString(), isSuccess: false);
     }
   }
 
@@ -145,11 +149,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    if (_showError && _errorMsg != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Text(_errorMsg!, style: GoogleFonts.poppins(color: Colors.red, fontSize: 14)),
-                      ),
                     if (_step == 0) ...[
                       TextField(
                         controller: _emailCtrl,
@@ -203,15 +202,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       ),
                     ],
                     if (_step == 2) ...[
-                      TextField(
+                      PasswordInputField(
                         controller: _newPasswordCtrl,
-                        style: GoogleFonts.poppins(),
-                        decoration: InputDecoration(
-                          labelText: 'New Password',
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        obscureText: true,
+                        labelText: 'New Password',
+                        hintText: 'Enter your new password (min 6 characters)',
                       ),
                       const SizedBox(height: 24),
                       SizedBox(
