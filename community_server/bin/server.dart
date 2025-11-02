@@ -408,7 +408,14 @@ void main(List<String> args) async {
   
   // Connect to MongoDB (safe init: only assign globals after successful open)
   try {
-    final tmpDb = Db('mongodb://rayapureddyvardhan2004:4ArqM4OQHY1udO07@cluster0-shard-00-00.sufzx.mongodb.net:27017,cluster0-shard-00-01.sufzx.mongodb.net:27017,cluster0-shard-00-02.sufzx.mongodb.net:27017/learnease?ssl=true&replicaSet=Cluster0-shard-0&authSource=admin');
+    // Try to read MongoDB URI from environment or .env
+    final mongoUri = Platform.environment['MONGODB_URI'] ?? _readLocalEnvTop('MONGODB_URI') ?? 
+      'mongodb+srv://rayapureddyvardhan2004:KkUc9sQ9h7ajtI4Y@cluster0.sufzx.mongodb.net/learnease?retryWrites=true&w=majority';
+    
+    print('[MONGO] Attempting to connect to MongoDB...');
+    print('[MONGO] URI: ${mongoUri.replaceAll(RegExp(r':[^@]*@'), ':****@')}');
+    
+    final tmpDb = Db(mongoUri);
     await tmpDb.open().timeout(const Duration(seconds: 10));
     // only assign to globals after open succeeds
     mongoDb = tmpDb;
@@ -416,7 +423,7 @@ void main(List<String> args) async {
     print('✅ MongoDB connected successfully');
   } catch (e) {
     print('⚠️ MongoDB connection failed: $e');
-    print('⚠️ Contributions feature will be unavailable. Attempting to use local cache...');
+    print('⚠️ Contributions feature will be unavailable. Using local cache instead...');
     // Create a dummy local Db instance that won't be opened; use a local in-memory fallback collection wrapper
     try {
       final fallback = Db('mongodb://localhost:27017/learnease');
