@@ -59,9 +59,21 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
         allowedExtensions: ['txt', 'json'],
       );
 
-      if (result != null && result.files.single.path != null) {
-        final file = io.File(result.files.single.path!);
-        final content = await file.readAsString();
+      if (result != null && result.files.isNotEmpty) {
+        String content;
+        
+        // For web, use bytes property; for other platforms, use file path
+        if (result.files.single.bytes != null) {
+          // Web platform - use bytes
+          content = String.fromCharCodes(result.files.single.bytes!);
+        } else if (result.files.single.path != null) {
+          // Desktop/mobile platforms - use file path
+          final file = io.File(result.files.single.path!);
+          content = await file.readAsString();
+        } else {
+          throw Exception('Cannot access file content');
+        }
+
         setState(() {
           _fileContentController.text = content;
           _errorMessage = null;
