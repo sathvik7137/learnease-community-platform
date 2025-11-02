@@ -161,9 +161,9 @@ class _EditProfileScreenState extends State<EditProfileScreen>
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Colors.indigo.shade50,
-                Colors.blue.shade50.withOpacity(0.7),
-                Colors.purple.shade50.withOpacity(0.6),
+                const Color(0xFF0f172a), // Deep navy
+                const Color(0xFF1e293b), // Deep indigo
+                const Color(0xFF0f172a),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -171,24 +171,27 @@ class _EditProfileScreenState extends State<EditProfileScreen>
           ),
           child: Stack(
             children: [
-              // Soft glow background blur effect
+              // Soft bluish halo glow behind avatar area
               Positioned(
-                top: -50,
-                right: -50,
+                top: 80,
+                left: -30,
+                right: -30,
                 child: Container(
-                  width: 200,
-                  height: 200,
+                  width: 280,
+                  height: 280,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                       colors: [
-                        Colors.indigo.withOpacity(0.15),
-                        Colors.indigo.withOpacity(0.0),
+                        Colors.cyan.withOpacity(0.08),
+                        Colors.indigo.withOpacity(0.04),
+                        Colors.transparent,
                       ],
                     ),
                   ),
                 ),
               ),
+              // Subtle decorative glow (bottom-left)
               Positioned(
                 bottom: -100,
                 left: -50,
@@ -199,8 +202,8 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                       colors: [
-                        Colors.purple.withOpacity(0.1),
-                        Colors.purple.withOpacity(0.0),
+                        Colors.indigo.withOpacity(0.05),
+                        Colors.transparent,
                       ],
                     ),
                   ),
@@ -226,19 +229,24 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.indigo.withOpacity(0.3),
-                                        blurRadius: 20,
-                                        spreadRadius: 5,
+                                        color: Colors.cyan.withOpacity(0.2),
+                                        blurRadius: 25,
+                                        spreadRadius: 8,
+                                      ),
+                                      BoxShadow(
+                                        color: Colors.indigo.withOpacity(0.15),
+                                        blurRadius: 15,
+                                        spreadRadius: 3,
                                       ),
                                     ],
                                   ),
                                   child: CircleAvatar(
                                     radius: 50,
-                                    backgroundColor: Colors.indigo.shade100,
-                                    child: Icon(
+                                    backgroundColor: const Color(0xFF1e293b),
+                                    child: const Icon(
                                       Icons.person,
                                       size: 60,
-                                      color: Colors.indigo,
+                                      color: Color(0xFF93c5fd), // Light cyan
                                     ),
                                   ),
                                 ),
@@ -266,17 +274,17 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                           shape: BoxShape.circle,
                                           gradient: LinearGradient(
                                             colors: [
-                                              Colors.indigo.shade600,
-                                              Colors.indigo.shade800,
+                                              const Color(0xFF6366f1),
+                                              const Color(0xFF3b82f6),
                                             ],
                                             begin: Alignment.topLeft,
                                             end: Alignment.bottomRight,
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.indigo
-                                                  .withOpacity(0.6),
-                                              blurRadius: 10,
+                                              color: Colors.cyan
+                                                  .withOpacity(0.4),
+                                              blurRadius: 12,
                                               spreadRadius: 2,
                                             ),
                                           ],
@@ -310,22 +318,24 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade600,
+                                  color: Colors.grey.shade300,
                                   letterSpacing: 0.3,
                                 ),
                               ),
                               const SizedBox(height: 8),
                               Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.8),
+                                  color: const Color(0xFF1e293b)
+                                      .withOpacity(0.6),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: Colors.grey.shade300,
+                                    color: const Color(0xFFCBD5E1)
+                                        .withOpacity(0.2),
                                     width: 1,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
+                                      color: Colors.black.withOpacity(0.2),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2),
                                     ),
@@ -339,7 +349,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                   children: [
                                     Icon(
                                       Icons.email,
-                                      color: Colors.grey.shade500,
+                                      color: Colors.grey.shade400,
                                       size: 20,
                                     ),
                                     const SizedBox(width: 12),
@@ -348,7 +358,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                         widget.email,
                                         style: TextStyle(
                                           fontSize: 16,
-                                          color: Colors.grey.shade700,
+                                          color: Colors.grey.shade200,
                                           fontWeight: FontWeight.w500,
                                         ),
                                       ),
@@ -384,22 +394,23 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.indigo.shade900,
+                                  color: Colors.grey.shade300,
                                   letterSpacing: 0.3,
                                 ),
                               ),
                               const SizedBox(height: 8),
                               Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  color: const Color(0xFF1E293B),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: Colors.indigo.shade300,
+                                    color: const Color(0xFFCBD5E1)
+                                        .withOpacity(0.25),
                                     width: 1.5,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.indigo.withOpacity(0.08),
+                                      color: Colors.indigo.withOpacity(0.1),
                                       blurRadius: 12,
                                       offset: const Offset(0, 2),
                                     ),
@@ -414,18 +425,18 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w500,
-                                    color: Colors.black87,
+                                    color: Color(0xFFE2E8F0),
                                   ),
                                   decoration: InputDecoration(
                                     hintText: 'Enter your username',
                                     hintStyle: TextStyle(
-                                      color: Colors.grey.shade400,
+                                      color: Colors.grey.shade600,
                                       fontSize: 15,
                                     ),
                                     border: InputBorder.none,
                                     prefixIcon: Icon(
                                       Icons.person_outline,
-                                      color: Colors.indigo.shade600,
+                                      color: const Color(0xFF93c5fd),
                                     ),
                                     prefixIconConstraints: const BoxConstraints(
                                       minWidth: 45,
@@ -461,30 +472,30 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                               gradient: _hasChanges && !_isLoading
                                   ? LinearGradient(
                                       colors: [
-                                        Colors.indigo.shade600,
-                                        Colors.indigo.shade800,
-                                        Colors.purple.shade700,
+                                        const Color(0xFF6366F1),
+                                        const Color(0xFF3B82F6),
                                       ],
                                       begin: Alignment.topLeft,
                                       end: Alignment.bottomRight,
                                     )
                                   : LinearGradient(
                                       colors: [
-                                        Colors.grey.shade300,
-                                        Colors.grey.shade400,
+                                        Colors.grey.shade700,
+                                        Colors.grey.shade800,
                                       ],
                                     ),
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 if (_hasChanges && !_isLoading)
                                   BoxShadow(
-                                    color: Colors.indigo.withOpacity(0.4),
-                                    blurRadius: 12,
+                                    color: const Color(0xFF6366F1)
+                                        .withOpacity(0.4),
+                                    blurRadius: 16,
                                     spreadRadius: 2,
                                   )
                                 else
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
+                                    color: Colors.black.withOpacity(0.2),
                                     blurRadius: 8,
                                   ),
                               ],
@@ -516,6 +527,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                       style: const TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
                                       ),
                                     ),
                             ),
@@ -524,7 +536,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
 
                         const SizedBox(height: 16),
 
-                        // Info Message with Glassmorphism Effect
+                        // Info Message with Glassmorphism Effect (Dark Mode)
                         SizedBox(
                           width: double.infinity,
                           child: ClipRRect(
@@ -536,12 +548,19 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                               ),
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.shade100.withOpacity(0.3),
+                                  color: Colors.white.withOpacity(0.08),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: Colors.blue.shade200.withOpacity(0.5),
+                                    color: Colors.cyan.withOpacity(0.3),
                                     width: 1.5,
                                   ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.cyan.withOpacity(0.15),
+                                      blurRadius: 12,
+                                      spreadRadius: 0,
+                                    ),
+                                  ],
                                 ),
                                 padding: const EdgeInsets.all(14),
                                 child: Row(
@@ -549,7 +568,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                   children: [
                                     Icon(
                                       Icons.info_outline,
-                                      color: Colors.blue.shade700,
+                                      color: Colors.cyan.shade300,
                                       size: 20,
                                     ),
                                     const SizedBox(width: 12),
@@ -558,7 +577,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                         'Your username will be visible to other users in the community.',
                                         style: TextStyle(
                                           fontSize: 13,
-                                          color: Colors.blue.shade800,
+                                          color: Colors.grey.shade100,
                                           height: 1.4,
                                           fontWeight: FontWeight.w500,
                                         ),
