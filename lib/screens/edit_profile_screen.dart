@@ -2,6 +2,29 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import '../services/auth_service.dart';
 
+// Shared accent color palette (works on both light and dark)
+class LearnEaseColors {
+  static const Color primaryAccent = Color(0xFF6366F1); // Indigo
+  static const Color secondaryAccent = Color(0xFF3B82F6); // Blue
+  static const Color tertiaryAccent = Color(0xFF60A5FA); // Light blue
+  
+  // Light mode colors
+  static const Color lightBg1 = Color(0xFFEEF2FF);
+  static const Color lightBg2 = Color(0xFFE0E7FF);
+  static const Color lightCardBg = Color(0xFFFAFBFF);
+  static const Color lightText = Color(0xFF1F2937);
+  static const Color lightTextSecondary = Color(0xFF6B7280);
+  static const Color lightBorder = Color(0xFFE5E7EB);
+  
+  // Dark mode colors
+  static const Color darkBg1 = Color(0xFF0F172A);
+  static const Color darkBg2 = Color(0xFF1E293B);
+  static const Color darkCardBg = Color(0xFF1E293B);
+  static const Color darkText = Color(0xFFE2E8F0);
+  static const Color darkTextSecondary = Color(0xFFCBD5E1);
+  static const Color darkBorder = Color(0xFF475569);
+}
+
 class EditProfileScreen extends StatefulWidget {
   final String currentUsername;
   final String email;
@@ -160,18 +183,24 @@ class _EditProfileScreenState extends State<EditProfileScreen>
         child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [
-                const Color(0xFF0f172a), // Deep navy
-                const Color(0xFF1e293b), // Deep indigo
-                const Color(0xFF0f172a),
-              ],
+              colors: Theme.of(context).brightness == Brightness.dark
+                  ? [
+                      LearnEaseColors.darkBg1,
+                      LearnEaseColors.darkBg2,
+                      LearnEaseColors.darkBg1,
+                    ]
+                  : [
+                      LearnEaseColors.lightBg1,
+                      LearnEaseColors.lightBg2,
+                      LearnEaseColors.lightBg1,
+                    ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
           child: Stack(
             children: [
-              // Soft bluish halo glow behind avatar area
+              // Adaptive glow effects
               Positioned(
                 top: 80,
                 left: -30,
@@ -182,16 +211,23 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
-                      colors: [
-                        Colors.cyan.withOpacity(0.08),
-                        Colors.indigo.withOpacity(0.04),
-                        Colors.transparent,
-                      ],
+                      colors: Theme.of(context).brightness == Brightness.dark
+                          ? [
+                              Colors.cyan.withOpacity(0.08),
+                              Colors.indigo.withOpacity(0.04),
+                              Colors.transparent,
+                            ]
+                          : [
+                              LearnEaseColors.tertiaryAccent
+                                  .withOpacity(0.08),
+                              LearnEaseColors.primaryAccent
+                                  .withOpacity(0.04),
+                              Colors.transparent,
+                            ],
                     ),
                   ),
                 ),
               ),
-              // Subtle decorative glow (bottom-left)
               Positioned(
                 bottom: -100,
                 left: -50,
@@ -201,10 +237,15 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
-                      colors: [
-                        Colors.indigo.withOpacity(0.05),
-                        Colors.transparent,
-                      ],
+                      colors: Theme.of(context).brightness == Brightness.dark
+                          ? [
+                              Colors.indigo.withOpacity(0.05),
+                              Colors.transparent,
+                            ]
+                          : [
+                              LearnEaseColors.primaryAccent.withOpacity(0.03),
+                              Colors.transparent,
+                            ],
                     ),
                   ),
                 ),
@@ -229,24 +270,51 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.cyan.withOpacity(0.2),
-                                        blurRadius: 25,
-                                        spreadRadius: 8,
+                                        color: Theme.of(context).brightness ==
+                                                Brightness.dark
+                                            ? Colors.cyan.withOpacity(0.2)
+                                            : LearnEaseColors.primaryAccent
+                                                .withOpacity(0.15),
+                                        blurRadius: Theme.of(context)
+                                                    .brightness ==
+                                                Brightness.dark
+                                            ? 25
+                                            : 12,
+                                        spreadRadius: Theme.of(context)
+                                                    .brightness ==
+                                                Brightness.dark
+                                            ? 8
+                                            : 2,
                                       ),
-                                      BoxShadow(
-                                        color: Colors.indigo.withOpacity(0.15),
-                                        blurRadius: 15,
-                                        spreadRadius: 3,
-                                      ),
+                                      if (Theme.of(context).brightness ==
+                                          Brightness.dark)
+                                        BoxShadow(
+                                          color: Colors.indigo.withOpacity(0.15),
+                                          blurRadius: 15,
+                                          spreadRadius: 3,
+                                        )
+                                      else
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.08),
+                                          blurRadius: 8,
+                                          spreadRadius: 1,
+                                        ),
                                     ],
                                   ),
                                   child: CircleAvatar(
                                     radius: 50,
-                                    backgroundColor: const Color(0xFF1e293b),
-                                    child: const Icon(
+                                    backgroundColor: Theme.of(context)
+                                                .brightness ==
+                                            Brightness.dark
+                                        ? LearnEaseColors.darkCardBg
+                                        : LearnEaseColors.lightCardBg,
+                                    child: Icon(
                                       Icons.person,
                                       size: 60,
-                                      color: Color(0xFF93c5fd), // Light cyan
+                                      color: Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? const Color(0xFF93c5fd)
+                                          : LearnEaseColors.primaryAccent,
                                     ),
                                   ),
                                 ),
@@ -272,25 +340,31 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                       child: Container(
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
-                                          gradient: LinearGradient(
+                                          gradient: const LinearGradient(
                                             colors: [
-                                              const Color(0xFF6366f1),
-                                              const Color(0xFF3b82f6),
+                                              LearnEaseColors.primaryAccent,
+                                              LearnEaseColors.secondaryAccent,
                                             ],
                                             begin: Alignment.topLeft,
                                             end: Alignment.bottomRight,
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.cyan
-                                                  .withOpacity(0.4),
+                                              color: Theme.of(context)
+                                                          .brightness ==
+                                                      Brightness.dark
+                                                  ? Colors.cyan
+                                                      .withOpacity(0.4)
+                                                  : LearnEaseColors
+                                                      .primaryAccent
+                                                      .withOpacity(0.3),
                                               blurRadius: 12,
                                               spreadRadius: 2,
                                             ),
                                           ],
                                         ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(10),
+                                        child: const Padding(
+                                          padding: EdgeInsets.all(10),
                                           child: Icon(
                                             Icons.camera_alt,
                                             color: Colors.white,
@@ -318,24 +392,37 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade300,
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? LearnEaseColors.darkTextSecondary
+                                      : LearnEaseColors.lightTextSecondary,
                                   letterSpacing: 0.3,
                                 ),
                               ),
                               const SizedBox(height: 8),
                               Container(
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF1e293b)
-                                      .withOpacity(0.6),
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? LearnEaseColors.darkCardBg
+                                          .withOpacity(0.6)
+                                      : Colors.white.withOpacity(0.7),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: const Color(0xFFCBD5E1)
-                                        .withOpacity(0.2),
+                                    color: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? LearnEaseColors.darkBorder
+                                            .withOpacity(0.3)
+                                        : LearnEaseColors.lightBorder
+                                            .withOpacity(0.5),
                                     width: 1,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.2),
+                                      color: Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? Colors.black.withOpacity(0.2)
+                                          : Colors.black.withOpacity(0.05),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2),
                                     ),
@@ -349,7 +436,10 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                   children: [
                                     Icon(
                                       Icons.email,
-                                      color: Colors.grey.shade400,
+                                      color: Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? Colors.grey.shade400
+                                          : Colors.grey.shade500,
                                       size: 20,
                                     ),
                                     const SizedBox(width: 12),
@@ -358,7 +448,11 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                         widget.email,
                                         style: TextStyle(
                                           fontSize: 16,
-                                          color: Colors.grey.shade200,
+                                          color: Theme.of(context)
+                                                      .brightness ==
+                                                  Brightness.dark
+                                              ? LearnEaseColors.darkText
+                                              : LearnEaseColors.lightText,
                                           fontWeight: FontWeight.w500,
                                         ),
                                       ),
@@ -373,7 +467,10 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                   '(Cannot be changed)',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.grey.shade500,
+                                    color: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Colors.grey.shade500
+                                        : Colors.grey.shade500,
                                     fontStyle: FontStyle.italic,
                                   ),
                                 ),
@@ -394,23 +491,36 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade300,
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? LearnEaseColors.darkTextSecondary
+                                      : LearnEaseColors.lightTextSecondary,
                                   letterSpacing: 0.3,
                                 ),
                               ),
                               const SizedBox(height: 8),
                               Container(
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF1E293B),
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? LearnEaseColors.darkCardBg
+                                      : Colors.white,
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: const Color(0xFFCBD5E1)
-                                        .withOpacity(0.25),
+                                    color: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? LearnEaseColors.darkBorder
+                                            .withOpacity(0.4)
+                                        : LearnEaseColors.lightBorder,
                                     width: 1.5,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.indigo.withOpacity(0.1),
+                                      color: Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? Colors.indigo.withOpacity(0.1)
+                                          : LearnEaseColors.primaryAccent
+                                              .withOpacity(0.08),
                                       blurRadius: 12,
                                       offset: const Offset(0, 2),
                                     ),
@@ -422,21 +532,30 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                 child: TextFormField(
                                   controller: _usernameController,
                                   enabled: !_isLoading,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w500,
-                                    color: Color(0xFFE2E8F0),
+                                    color: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? LearnEaseColors.darkText
+                                        : LearnEaseColors.lightText,
                                   ),
                                   decoration: InputDecoration(
                                     hintText: 'Enter your username',
                                     hintStyle: TextStyle(
-                                      color: Colors.grey.shade600,
+                                      color: Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? Colors.grey.shade600
+                                          : Colors.grey.shade400,
                                       fontSize: 15,
                                     ),
                                     border: InputBorder.none,
                                     prefixIcon: Icon(
                                       Icons.person_outline,
-                                      color: const Color(0xFF93c5fd),
+                                      color: Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? const Color(0xFF93c5fd)
+                                          : LearnEaseColors.primaryAccent,
                                     ),
                                     prefixIconConstraints: const BoxConstraints(
                                       minWidth: 45,
@@ -462,7 +581,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                         ),
                         const SizedBox(height: 32),
 
-                        // Save Button with Gradient (Smart - only enabled when changes made)
+                        // Save Button with Adaptive Gradient
                         SizedBox(
                           width: double.infinity,
                           height: 50,
@@ -470,32 +589,32 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                             duration: const Duration(milliseconds: 300),
                             decoration: BoxDecoration(
                               gradient: _hasChanges && !_isLoading
-                                  ? LinearGradient(
+                                  ? const LinearGradient(
                                       colors: [
-                                        const Color(0xFF6366F1),
-                                        const Color(0xFF3B82F6),
+                                        LearnEaseColors.primaryAccent,
+                                        LearnEaseColors.secondaryAccent,
                                       ],
                                       begin: Alignment.topLeft,
                                       end: Alignment.bottomRight,
                                     )
                                   : LinearGradient(
                                       colors: [
+                                        Colors.grey.shade600,
                                         Colors.grey.shade700,
-                                        Colors.grey.shade800,
                                       ],
                                     ),
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 if (_hasChanges && !_isLoading)
                                   BoxShadow(
-                                    color: const Color(0xFF6366F1)
+                                    color: LearnEaseColors.primaryAccent
                                         .withOpacity(0.4),
                                     blurRadius: 16,
                                     spreadRadius: 2,
                                   )
                                 else
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.2),
+                                    color: Colors.black.withOpacity(0.15),
                                     blurRadius: 8,
                                   ),
                               ],
@@ -536,7 +655,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
 
                         const SizedBox(height: 16),
 
-                        // Info Message with Glassmorphism Effect (Dark Mode)
+                        // Adaptive Info Box with Glassmorphism
                         SizedBox(
                           width: double.infinity,
                           child: ClipRRect(
@@ -548,15 +667,25 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                               ),
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.08),
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Colors.white.withOpacity(0.08)
+                                      : Colors.white.withOpacity(0.6),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: Colors.cyan.withOpacity(0.3),
+                                    color: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Colors.cyan.withOpacity(0.3)
+                                        : LearnEaseColors.lightBorder
+                                            .withOpacity(0.4),
                                     width: 1.5,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.cyan.withOpacity(0.15),
+                                      color: Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? Colors.cyan.withOpacity(0.15)
+                                          : Colors.black.withOpacity(0.05),
                                       blurRadius: 12,
                                       spreadRadius: 0,
                                     ),
@@ -568,7 +697,10 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                   children: [
                                     Icon(
                                       Icons.info_outline,
-                                      color: Colors.cyan.shade300,
+                                      color: Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? Colors.cyan.shade300
+                                          : LearnEaseColors.secondaryAccent,
                                       size: 20,
                                     ),
                                     const SizedBox(width: 12),
@@ -577,7 +709,11 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                         'Your username will be visible to other users in the community.',
                                         style: TextStyle(
                                           fontSize: 13,
-                                          color: Colors.grey.shade100,
+                                          color: Theme.of(context)
+                                                      .brightness ==
+                                                  Brightness.dark
+                                              ? Colors.grey.shade100
+                                              : LearnEaseColors.lightText,
                                           height: 1.4,
                                           fontWeight: FontWeight.w500,
                                         ),
