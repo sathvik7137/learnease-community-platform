@@ -62,7 +62,9 @@ class _SignInScreenState extends State<SignInScreen> {
     } else {
       final err = resp['error'] ?? 'Failed to send OTP';
       final isUnregisteredEmail = err.toString().toLowerCase().contains('invalid credentials') ||
-                                 err.toString().toLowerCase().contains('check your email');
+                                 err.toString().toLowerCase().contains('check your email') ||
+                                 err.toString().toLowerCase().contains('not registered') ||
+                                 err.toString().toLowerCase().contains('sign up');
       
       setState(() {
         _showSignUpOption = isUnregisteredEmail;
