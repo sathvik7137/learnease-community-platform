@@ -80,6 +80,13 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
           _successMessage = null;
           _parsedItems = [];
         });
+
+        // Auto-parse the content immediately
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) {
+            _parseFileContent();
+          }
+        });
       }
     } catch (e) {
       setState(() {
