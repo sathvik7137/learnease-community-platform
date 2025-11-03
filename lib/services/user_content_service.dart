@@ -291,14 +291,18 @@ class UserContentService {
   static Future<bool> deleteContribution(String id) async {
     try {
       // Try to delete from server
+      print('🔍 Attempting server DELETE for contribution: $id');
       final response = await AuthService().authenticatedRequest('DELETE', '/api/contributions/$id');
+      print('📨 Server response status: ${response.statusCode}');
+      print('📨 Server response body: ${response.body}');
       
       if (response.statusCode == 200) {
         // Success - refresh local cache and notify listeners
+        print('✅ Server delete successful, refreshing cache');
         await getAllContributions(forceRefresh: true);
         return true;
       } else {
-        print('Server responded with status ${response.statusCode}');
+        print('❌ Server responded with status ${response.statusCode}: ${response.body}');
         // Try local deletion as fallback
         final allContributions = await _getLocalContributions();
         allContributions.removeWhere((c) => c.id == id);
@@ -306,7 +310,7 @@ class UserContentService {
         return false; // Still report failure so user knows server delete failed
       }
     } catch (e) {
-      print('Server delete failed: $e, deleting locally');
+      print('❌ Server delete failed: $e, deleting locally');
       // Fallback to local storage
       try {
         final allContributions = await _getLocalContributions();
@@ -314,7 +318,7 @@ class UserContentService {
         await _cacheContributions(allContributions);
         return false; // Report partial success
       } catch (e) {
-        print('Local delete also failed: $e');
+        print('❌ Local delete also failed: $e');
         return false;
       }
     }

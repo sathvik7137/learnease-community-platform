@@ -175,14 +175,16 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     // Delete each item
     for (final itemId in itemsToDelete) {
       try {
+        print('🗑️ Attempting to delete contribution: $itemId');
         final result = await UserContentService.deleteContribution(itemId);
+        print('📊 Delete result for $itemId: $result');
         if (result) {
           successCount++;
         } else {
           failureCount++;
         }
       } catch (e) {
-        print('Error deleting item: $e');
+        print('❌ Error deleting item $itemId: $e');
         failureCount++;
       }
     }
