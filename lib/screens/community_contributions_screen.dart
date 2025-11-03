@@ -22,6 +22,10 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   ContentType? _filterType;
   StreamSubscription<List<UserContent>>? _realtimeSubscription;
   final AuthService _authService = AuthService();
+  
+  // Selection mode variables
+  bool _isSelectionMode = false;
+  Set<String> _selectedContentIds = {}; // Track selected content by ID
 
   @override
   void initState() {
@@ -188,50 +192,92 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     );
   }
 
+  // Toggle selection mode
+  void _toggleSelectionMode() {
+    setState(() {
+      _isSelectionMode = !_isSelectionMode;
+      if (!_isSelectionMode) {
+        _selectedContentIds.clear();
+      }
+    });
+  }
+
+  // Toggle selection of a specific item
+  void _toggleContentSelection(String contentId) {
+    setState(() {
+      if (_selectedContentIds.contains(contentId)) {
+        _selectedContentIds.remove(contentId);
+      } else {
+        _selectedContentIds.add(contentId);
+      }
+    });
+  }
+
+  // Delete all selected content
+  Future<void> _deleteSelectedContent() async {
+    if (_selectedContentIds.isEmpty) return;
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Selected Content'),
+        content: Text(
+          'Are you sure you want to delete ${_selectedContentIds.length} item(s)? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Delete all selected content
+    try {
+      for (final contentId in _selectedContentIds) {
+        await UserContentService.deleteContent(contentId);
+      }
+
+      if (mounted) {
+        setState(() {
+          _selectedContentIds.clear();
+          _isSelectionMode = false;
+        });
+        _loadContributions();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${_selectedContentIds.length} item(s) deleted')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting content: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(64),
-        child: Container(
-          color: isDark ? const Color(0xFF121212) : Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: colors.primary.withOpacity(0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: TabBar(
-                controller: _tabController,
-                tabs: const [
-                  Tab(text: 'Java'),
-                  Tab(text: 'DBMS'),
-                ],
-                indicator: UnderlineTabIndicator(
-                  borderSide: BorderSide(
-                    color: colors.primary,
-                    width: 3.0,
-                  ),
-                ),
-                labelColor: colors.primary,
-                unselectedLabelColor: colors.onSurface.withOpacity(0.5),
-                dividerColor: colors.outline,
-              ),
-            ),
-          ),
-        ),
-      ),
+      appBar: _isSelectionMode
+          ? _buildSelectionModeAppBar()
+          : _buildNormalAppBar(colors, isDark),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _contributions.isEmpty
@@ -260,6 +306,122 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
         tooltip: 'Add Content',
       ),
     );
+  }
+
+  PreferredSize _buildNormalAppBar(ColorScheme colors, bool isDark) {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(64),
+      child: Container(
+        color: isDark ? const Color(0xFF121212) : Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.primary.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: TabBar(
+                    controller: _tabController,
+                    tabs: const [
+                      Tab(text: 'Java'),
+                      Tab(text: 'DBMS'),
+                    ],
+                    indicator: UnderlineTabIndicator(
+                      borderSide: BorderSide(
+                        color: colors.primary,
+                        width: 3.0,
+                      ),
+                    ),
+                    labelColor: colors.primary,
+                    unselectedLabelColor: colors.onSurface.withOpacity(0.5),
+                    dividerColor: colors.outline,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Select button in menu
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'select') {
+                    _toggleSelectionMode();
+                  }
+                },
+                itemBuilder: (BuildContext context) => [
+                  const PopupMenuItem(
+                    value: 'select',
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_box_outline_blank, size: 20),
+                        SizedBox(width: 8),
+                        Text('Select Items'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  PreferredSize _buildSelectionModeAppBar() {
+    final colors = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(64),
+      child: Container(
+        color: colors.primary.withOpacity(0.1),
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
+        child: Row(
+          children: [
+            // Cancel button
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: _toggleSelectionMode,
+              tooltip: 'Cancel Selection',
+            ),
+            // Selection counter
+            Expanded(
+              child: Center(
+                child: Text(
+                  _selectedContentIds.isEmpty
+                      ? 'Select Items'
+                      : '${_selectedContentIds.length} Selected',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: colors.primary,
+                  ),
+                ),
+              ),
+            ),
+            // Delete button
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: _selectedContentIds.isEmpty ? null : _deleteSelectedContent,
+              color: _selectedContentIds.isEmpty
+                  ? colors.onSurface.withOpacity(0.3)
+                  : Colors.red,
+              tooltip: 'Delete Selected',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
   }
 
   Widget _buildEmptyState() {
@@ -305,6 +467,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   Widget _buildContentCard(UserContent content, String? currentUsername, String? currentEmail) {
     final title = _getContentTitle(content);
     final subtitle = _getContentSubtitle(content);
+    final isSelected = _selectedContentIds.contains(content.id);
     
     // Check ownership by comparing username OR email prefix (from old registration)
     final isOwner = currentUsername != null && 
@@ -316,8 +479,15 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     
     return Card(
       margin: EdgeInsets.only(bottom: 12.0),
+      color: isSelected ? Colors.blue.withOpacity(0.15) : null,
       child: InkWell(
-        onTap: () => _viewContent(content),
+        onTap: _isSelectionMode
+            ? () => _toggleContentSelection(content.id)
+            : () => _viewContent(content),
+        onLongPress: !_isSelectionMode ? () {
+          _toggleSelectionMode();
+          _toggleContentSelection(content.id);
+        } : null,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: EdgeInsets.all(16.0),
@@ -326,6 +496,17 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
             children: [
               Row(
                 children: [
+                  // Checkbox in selection mode
+                  if (_isSelectionMode)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12.0),
+                      child: Checkbox(
+                        value: isSelected,
+                        onChanged: (value) {
+                          _toggleContentSelection(content.id);
+                        },
+                      ),
+                    ),
                   _getTypeIcon(content.type),
                   SizedBox(width: 8),
                   Expanded(
@@ -338,60 +519,61 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
                       ],
                     ),
                   ),
-                  PopupMenuButton<String>(
-                    itemBuilder: (context) {
-                      final items = <PopupMenuEntry<String>>[
-                        PopupMenuItem<String>(
-                          value: 'view',
-                          child: Row(
-                            children: [
-                              Icon(Icons.visibility, size: 20),
-                              SizedBox(width: 8),
-                              Text('View'),
-                            ],
-                          ),
-                        ),
-                      ];
-                      if (isOwner) {
-                        items.addAll([
+                  if (!_isSelectionMode)
+                    PopupMenuButton<String>(
+                      itemBuilder: (context) {
+                        final items = <PopupMenuEntry<String>>[
                           PopupMenuItem<String>(
-                            value: 'edit',
+                            value: 'view',
                             child: Row(
                               children: [
-                                Icon(Icons.edit, size: 20),
+                                Icon(Icons.visibility, size: 20),
                                 SizedBox(width: 8),
-                                Text('Edit'),
+                                Text('View'),
                               ],
                             ),
                           ),
-                          PopupMenuItem<String>(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete, size: 20, color: Colors.red),
-                                SizedBox(width: 8),
-                                Text('Delete', style: TextStyle(color: Colors.red)),
-                              ],
+                        ];
+                        if (isOwner) {
+                          items.addAll([
+                            PopupMenuItem<String>(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit, size: 20),
+                                  SizedBox(width: 8),
+                                  Text('Edit'),
+                                ],
+                              ),
                             ),
-                          ),
-                        ]);
-                      }
-                      return items;
-                    },
-                    onSelected: (value) {
-                      switch (value) {
-                        case 'view':
-                          _viewContent(content);
-                          break;
-                        case 'edit':
-                          _editContent(content);
-                          break;
-                        case 'delete':
-                          _deleteContent(content);
-                          break;
-                      }
-                    },
-                  ),
+                            PopupMenuItem<String>(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete, size: 20, color: Colors.red),
+                                  SizedBox(width: 8),
+                                  Text('Delete', style: TextStyle(color: Colors.red)),
+                                ],
+                              ),
+                            ),
+                          ]);
+                        }
+                        return items;
+                      },
+                      onSelected: (value) {
+                        switch (value) {
+                          case 'view':
+                            _viewContent(content);
+                            break;
+                          case 'edit':
+                            _editContent(content);
+                            break;
+                          case 'delete':
+                            _deleteContent(content);
+                            break;
+                        }
+                      },
+                    ),
                 ],
               ),
               SizedBox(height: 12),
