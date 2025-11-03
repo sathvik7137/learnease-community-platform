@@ -490,13 +490,22 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     final subtitle = _getContentSubtitle(content);
     final isSelected = _selectedIndices.contains(index);
     
+    // Check if user is actually logged in (must have both username AND email)
+    final isLoggedIn = currentUsername != null && 
+                       currentUsername.isNotEmpty && 
+                       currentEmail != null && 
+                       currentEmail.isNotEmpty;
+    
     // Check ownership by comparing username (case-insensitive, strict match only)
+    // Only allow ownership if user is logged in AND usernames match
     final currentUsernameNormalized = currentUsername?.trim().toLowerCase() ?? '';
     final authorNameNormalized = content.authorName.trim().toLowerCase();
-    final isOwner = currentUsernameNormalized.isNotEmpty && currentUsernameNormalized == authorNameNormalized;
+    final isOwner = isLoggedIn && 
+                    currentUsernameNormalized.isNotEmpty && 
+                    currentUsernameNormalized == authorNameNormalized;
     
     // Debug: print ownership check
-    print('Current user: "$currentUsername" → normalized: "$currentUsernameNormalized", Content author: "${content.authorName}" → normalized: "$authorNameNormalized", Is owner: $isOwner');
+    print('Logged in: $isLoggedIn, Current user: "$currentUsername" → normalized: "$currentUsernameNormalized", Content author: "${content.authorName}" → normalized: "$authorNameNormalized", Is owner: $isOwner');
     
     return Card(
       margin: const EdgeInsets.only(bottom: 12.0),
@@ -711,6 +720,23 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   }
 
   Future<void> _editContent(UserContent content) async {
+    // Security check: Verify ownership before allowing edit
+    final currentUsernameNormalized = _currentUsername?.trim().toLowerCase() ?? '';
+    final authorNameNormalized = content.authorName.trim().toLowerCase();
+    final isOwner = currentUsernameNormalized.isNotEmpty && 
+                    currentUsernameNormalized == authorNameNormalized;
+    
+    if (!isOwner) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You can only edit your own contributions'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    
     // Navigate to AddContentScreen in edit mode
     final result = await Navigator.push<bool>(
       context,
@@ -726,6 +752,23 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   }
 
   Future<void> _deleteContent(UserContent content) async {
+    // Security check: Verify ownership before allowing delete
+    final currentUsernameNormalized = _currentUsername?.trim().toLowerCase() ?? '';
+    final authorNameNormalized = content.authorName.trim().toLowerCase();
+    final isOwner = currentUsernameNormalized.isNotEmpty && 
+                    currentUsernameNormalized == authorNameNormalized;
+    
+    if (!isOwner) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You can only delete your own contributions'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
