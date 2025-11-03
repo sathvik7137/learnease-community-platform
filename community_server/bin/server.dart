@@ -175,6 +175,53 @@ String? _verifyJWT(String token) {
   }
 }
 
+// Helper to check if two user IDs belong to the same person (by email)
+// This handles cases where a user's account was migrated and got a new UUID
+bool _isSameUser(String userId1, String userId2) {
+  if (userId1 == userId2) return true; // Direct match
+  
+  // Get email for userId1
+  String? email1;
+  if (!dbAvailable) {
+    try {
+      email1 = usersCache.firstWhere((u) => u['id'] == userId1)['email'] as String?;
+    } catch (_) {
+      return false;
+    }
+  } else {
+    try {
+      final rows = db.select('SELECT email FROM users WHERE id = ?', [userId1]);
+      if (rows.isNotEmpty) email1 = rows.first['email'] as String?;
+    } catch (_) {
+      return false;
+    }
+  }
+  
+  if (email1 == null) return false;
+  
+  // Get email for userId2
+  String? email2;
+  if (!dbAvailable) {
+    try {
+      email2 = usersCache.firstWhere((u) => u['id'] == userId2)['email'] as String?;
+    } catch (_) {
+      return false;
+    }
+  } else {
+    try {
+      final rows = db.select('SELECT email FROM users WHERE id = ?', [userId2]);
+      if (rows.isNotEmpty) email2 = rows.first['email'] as String?;
+    } catch (_) {
+      return false;
+    }
+  }
+  
+  if (email2 == null) return false;
+  
+  // If both emails match, it's the same person
+  return email1 == email2;
+}
+
 // Session DB helpers
 void _dbSaveSession(String id, String userId, String refreshToken, String createdAt, String expiresAt) {
   if (!dbAvailable) {
@@ -1543,98 +1590,55 @@ void main(List<String> args) async {
       }
       print('✅ Document found');
       
-      // Check authorization - try both authorId and authorUsername matching
+      // Check authorization using multiple methods
       final docAuthorId = doc['authorId'] as String?;
       final docAuthorName = doc['authorName'] as String? ?? doc['authorUsername'] as String?;
       print('   Document authorId: $docAuthorId, authorName: $docAuthorName');
       print('   Current userId: $userId');
       
-      // First, try to match by authorId (for new contributions)
+      // Authorization check - try multiple methods
+      bool isAuthorized = false;
+      
+      // Method 1: Direct ID match (for new contributions)
       if (docAuthorId != null && docAuthorId == userId) {
-        print('✅ Authorization check passed (ID match), deleting document...');
-      } else if (docAuthorId != null && docAuthorId != userId) {
-        // ID doesn't match, try username fallback
-        print('⚠️ AuthorId mismatch, trying username match...');
-        
-        // Get current user to get their username
-        if (!dbAvailable) {
-          // Use cache if DB not available
-          try {
-            final currentUserData = usersCache.firstWhere((u) => u['id'] == userId);
-            final currentUsername = currentUserData['username'] as String?;
-            print('   Current user username (from cache): $currentUsername');
-            
-            if (docAuthorName != null && docAuthorName == currentUsername) {
-              print('✅ Authorization check passed (username match), deleting document...');
-            } else {
-              print('❌ User is not the author. Doc author: $docAuthorName, User: $currentUsername');
-              return Response.forbidden(jsonEncode({'error': 'You can only delete your own contributions'}), headers: {'Content-Type': 'application/json'});
-            }
-          } catch (_) {
-            print('❌ Could not find current user in cache');
-            return Response.forbidden(jsonEncode({'error': 'You can only delete your own contributions'}), headers: {'Content-Type': 'application/json'});
-          }
-        } else {
-          // Try to get from database
-          try {
-            final userRows = db.select('SELECT username FROM users WHERE id = ?', [userId]);
-            if (userRows.isEmpty) {
-              print('❌ Current user not found in database');
-              return Response.forbidden(jsonEncode({'error': 'You can only delete your own contributions'}), headers: {'Content-Type': 'application/json'});
-            }
-            final currentUsername = userRows.first['username'] as String?;
-            print('   Current user username (from DB): $currentUsername');
-            
-            if (docAuthorName != null && docAuthorName == currentUsername) {
-              print('✅ Authorization check passed (username match), deleting document...');
-            } else {
-              print('❌ User is not the author. Doc author: $docAuthorName, User: $currentUsername');
-              return Response.forbidden(jsonEncode({'error': 'You can only delete your own contributions'}), headers: {'Content-Type': 'application/json'});
-            }
-          } catch (e) {
-            print('❌ Error checking username: $e');
-            return Response.forbidden(jsonEncode({'error': 'You can only delete your own contributions'}), headers: {'Content-Type': 'application/json'});
-          }
+        print('✅ Authorized by direct ID match');
+        isAuthorized = true;
+      }
+      
+      // Method 2: Check if old authorId belongs to same person (by email)
+      if (!isAuthorized && docAuthorId != null) {
+        if (_isSameUser(docAuthorId, userId)) {
+          print('✅ Authorized by email match (same user, different UUID)');
+          isAuthorized = true;
         }
-      } else {
-        // No authorId but we have a name, check by name only
-        print('⚠️ Document has no authorId, checking by username...');
-        
-        if (docAuthorName == null) {
-          // Can't verify ownership at all
-          print('⚠️ Document has no authorId and no authorName, allowing deletion based on JWT authentication');
-        } else {
-          // Get current user username and compare
+      }
+      
+      // Method 3: Username match (for legacy data)
+      if (!isAuthorized && docAuthorName != null) {
+        try {
+          String? currentUsername;
           if (!dbAvailable) {
-            try {
-              final currentUserData = usersCache.firstWhere((u) => u['id'] == userId);
-              final currentUsername = currentUserData['username'] as String?;
-              if (docAuthorName != currentUsername) {
-                print('❌ User is not the author. Doc author: $docAuthorName, User: $currentUsername');
-                return Response.forbidden(jsonEncode({'error': 'You can only delete your own contributions'}), headers: {'Content-Type': 'application/json'});
-              }
-            } catch (_) {
-              print('❌ Could not verify current user');
-              return Response.forbidden(jsonEncode({'error': 'You can only delete your own contributions'}), headers: {'Content-Type': 'application/json'});
-            }
+            currentUsername = usersCache.firstWhere((u) => u['id'] == userId)['username'] as String?;
           } else {
-            try {
-              final userRows = db.select('SELECT username FROM users WHERE id = ?', [userId]);
-              if (userRows.isEmpty) {
-                print('❌ Current user not found in database');
-                return Response.forbidden(jsonEncode({'error': 'You can only delete your own contributions'}), headers: {'Content-Type': 'application/json'});
-              }
-              final currentUsername = userRows.first['username'] as String?;
-              if (docAuthorName != currentUsername) {
-                print('❌ User is not the author. Doc author: $docAuthorName, User: $currentUsername');
-                return Response.forbidden(jsonEncode({'error': 'You can only delete your own contributions'}), headers: {'Content-Type': 'application/json'});
-              }
-            } catch (e) {
-              print('❌ Error checking username: $e');
-              return Response.forbidden(jsonEncode({'error': 'You can only delete your own contributions'}), headers: {'Content-Type': 'application/json'});
-            }
+            final rows = db.select('SELECT username FROM users WHERE id = ?', [userId]);
+            if (rows.isNotEmpty) currentUsername = rows.first['username'] as String?;
           }
+          
+          if (currentUsername != null && docAuthorName == currentUsername) {
+            print('✅ Authorized by username match');
+            isAuthorized = true;
+          } else {
+            print('❌ Username mismatch: $docAuthorName != $currentUsername');
+          }
+        } catch (e) {
+          print('⚠️ Could not check username: $e');
         }
+      }
+      
+      // If no authorization method worked, deny
+      if (!isAuthorized) {
+        print('❌ User is not authorized to delete this contribution');
+        return Response.forbidden(jsonEncode({'error': 'You can only delete your own contributions'}), headers: {'Content-Type': 'application/json'});
       }
       
       print('✅ Authorization verified, proceeding with deletion...');
