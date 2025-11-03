@@ -1542,25 +1542,20 @@ void main(List<String> args) async {
         );
       }
       print('✅ Document found');
-      print('   Document authorId: ${doc['authorId']}, Current userId: $userId');
       
-      // Check authorization - be lenient with old content that may not have authorId
+      // Check authorization - compare authorId with JWT userId
       final docAuthorId = doc['authorId'] as String?;
-      final docAuthorName = doc['authorName'] as String?;
-      final currentUser = _dbGetUserById(userId);
-      final currentUsername = currentUser?['username'] as String?;
+      print('   Document authorId: $docAuthorId, Current userId: $userId');
       
-      if (docAuthorId != null && docAuthorId != userId) {
-        print('❌ User is not the author. Doc authorId: $docAuthorId, User: $userId');
-        return Response.forbidden(jsonEncode({'error': 'You can only delete your own contributions'}), headers: {'Content-Type': 'application/json'});
-      }
-      
-      // Also check by username if authorId is missing (for old content)
-      if (docAuthorId == null && docAuthorName != null && currentUsername != null) {
-        if (docAuthorName != currentUsername) {
-          print('❌ User is not the author. Doc authorName: $docAuthorName, User: $currentUsername');
+      // If document has authorId, it must match the current user
+      if (docAuthorId != null) {
+        if (docAuthorId != userId) {
+          print('❌ User is not the author. Doc authorId: $docAuthorId, User: $userId');
           return Response.forbidden(jsonEncode({'error': 'You can only delete your own contributions'}), headers: {'Content-Type': 'application/json'});
         }
+      } else {
+        // For old content without authorId, allow deletion (can't verify ownership)
+        print('⚠️ Document has no authorId, allowing deletion based on JWT authentication');
       }
       
       print('✅ Authorization check passed, deleting document...');
