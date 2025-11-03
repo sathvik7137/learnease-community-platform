@@ -49,10 +49,17 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   Future<void> _loadCurrentUserInfo() async {
     final username = await UserContentService.getUsername();
     final email = await _authService.getUserEmail();
+    final token = await _authService.getToken();
+    
+    // Only consider user logged in if they have a valid token
+    final isLoggedIn = token != null && token.isNotEmpty;
+    
     setState(() {
-      _currentUsername = username;
-      _currentEmail = email;
+      _currentUsername = isLoggedIn ? username : null;
+      _currentEmail = isLoggedIn ? email : null;
     });
+    
+    print('Auth check - Token exists: ${token != null}, Username: $username, Email: $email, Logged in: $isLoggedIn');
   }
   
   void _updateContributionsFromStream(List<UserContent> allContributions) {
