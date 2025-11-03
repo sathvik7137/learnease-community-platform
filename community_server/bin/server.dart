@@ -163,6 +163,18 @@ Map<String, String> _issueTokens(String userId, String? email) {
   return {'accessToken': accessToken, 'refreshToken': refreshToken};
 }
 
+// Helper to verify JWT and return user ID or null if invalid/expired
+String? _verifyJWT(String token) {
+  try {
+    final jwt = JWT.verify(token, SecretKey(jwtSecret));
+    final userId = jwt.payload['sub'] as String?;
+    return userId;
+  } catch (e) {
+    print('❌ JWT verification failed: $e');
+    return null;
+  }
+}
+
 // Session DB helpers
 void _dbSaveSession(String id, String userId, String refreshToken, String createdAt, String expiresAt) {
   if (!dbAvailable) {
@@ -1253,10 +1265,10 @@ void main(List<String> args) async {
         return Response(401, body: jsonEncode({'error': 'Authentication required'}), headers: {'Content-Type': 'application/json'});
       }
       final token = authHeader.substring(7);
-      final jwt = JWT.verify(token, SecretKey(jwtSecret));
-      final userId = jwt.payload['sub'] as String?;
+      
+      final userId = _verifyJWT(token);
       if (userId == null) {
-        return Response(401, body: jsonEncode({'error': 'Invalid token'}), headers: {'Content-Type': 'application/json'});
+        return Response(401, body: jsonEncode({'error': 'Invalid or expired token'}), headers: {'Content-Type': 'application/json'});
       }
       
       final user = _dbGetUserById(userId);
@@ -1283,10 +1295,10 @@ void main(List<String> args) async {
         return Response(401, body: jsonEncode({'error': 'Authentication required'}), headers: {'Content-Type': 'application/json'});
       }
       final token = authHeader.substring(7);
-      final jwt = JWT.verify(token, SecretKey(jwtSecret));
-      final userId = jwt.payload['sub'] as String?;
+      
+      final userId = _verifyJWT(token);
       if (userId == null) {
-        return Response(401, body: jsonEncode({'error': 'Invalid token'}), headers: {'Content-Type': 'application/json'});
+        return Response(401, body: jsonEncode({'error': 'Invalid or expired token'}), headers: {'Content-Type': 'application/json'});
       }
       
       final body = await request.readAsString();
@@ -1388,10 +1400,10 @@ void main(List<String> args) async {
         return Response.forbidden(jsonEncode({'error': 'Authentication required'}), headers: {'Content-Type': 'application/json'});
       }
       final token = authHeader.substring(7);
-      final jwt = JWT.verify(token, SecretKey(jwtSecret));
-      final userId = jwt.payload['sub'] as String?;
+      
+      final userId = _verifyJWT(token);
       if (userId == null) {
-        return Response.forbidden(jsonEncode({'error': 'Invalid token'}), headers: {'Content-Type': 'application/json'});
+        return Response.unauthorized(jsonEncode({'error': 'Invalid or expired token'}), headers: {'Content-Type': 'application/json'});
       }
       final user = _dbGetUserById(userId);
       if (user == null) {
@@ -1431,11 +1443,11 @@ void main(List<String> args) async {
         return Response.forbidden(jsonEncode({'error': 'Authentication required'}), headers: {'Content-Type': 'application/json'});
       }
       final token = authHeader.substring(7);
-      final jwt = JWT.verify(token, SecretKey(jwtSecret));
-      final userId = jwt.payload['sub'] as String?;
+      
+      final userId = _verifyJWT(token);
       if (userId == null) {
-        print('❌ User ID not found in token');
-        return Response.forbidden(jsonEncode({'error': 'Invalid token'}), headers: {'Content-Type': 'application/json'});
+        print('❌ JWT verification failed');
+        return Response.unauthorized(jsonEncode({'error': 'Invalid or expired token'}), headers: {'Content-Type': 'application/json'});
       }
       print('✅ User authenticated: $userId');
       
@@ -1500,14 +1512,15 @@ void main(List<String> args) async {
       final authHeader = request.headers['authorization'];
       if (authHeader == null || !authHeader.startsWith('Bearer ')) {
         print('❌ Auth header missing or invalid');
-        return Response.forbidden(jsonEncode({'error': 'Authentication required'}), headers: {'Content-Type': 'application/json'});
+        return Response(401, body: jsonEncode({'error': 'Authentication required'}), headers: {'Content-Type': 'application/json'});
       }
       final token = authHeader.substring(7);
-      final jwt = JWT.verify(token, SecretKey(jwtSecret));
-      final userId = jwt.payload['sub'] as String?;
+      
+      // Verify JWT token
+      final userId = _verifyJWT(token);
       if (userId == null) {
-        print('❌ User ID not found in token');
-        return Response.forbidden(jsonEncode({'error': 'Invalid token'}), headers: {'Content-Type': 'application/json'});
+        print('❌ JWT verification failed');
+        return Response(401, body: jsonEncode({'error': 'Invalid or expired token'}), headers: {'Content-Type': 'application/json'});
       }
       print('✅ User authenticated: $userId');
       
