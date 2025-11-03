@@ -8,8 +8,9 @@ import '../widgets/theme_toggle_widget.dart';
 
 class AddContentScreen extends StatefulWidget {
   final UserContent? existingContent; // For editing
+  final CourseCategory? initialCategory; // Pre-selected category from community tab
   
-  const AddContentScreen({super.key, this.existingContent});
+  const AddContentScreen({super.key, this.existingContent, this.initialCategory});
 
   @override
   State<AddContentScreen> createState() => _AddContentScreenState();
@@ -23,6 +24,7 @@ class _AddContentScreenState extends State<AddContentScreen> {
   String? _errorMessage;
   String? _successMessage;
   String? _username;
+  String? _email;
 
   @override
   void initState() {
@@ -38,15 +40,20 @@ class _AddContentScreenState extends State<AddContentScreen> {
         ...widget.existingContent!.content,
       };
       _jsonController.text = _prettyPrintJson(contentWithType);
+    } else if (widget.initialCategory != null) {
+      // Pre-select category from community tab
+      _selectedCategory = widget.initialCategory!;
     }
   }
 
   Future<void> _loadUsername() async {
     final username = await UserContentService.getUsername();
+    final email = await UserContentService.getEmail();
 
     if (username != null && username.isNotEmpty) {
       setState(() {
         _username = username;
+        _email = email;
       });
       return;
     }
@@ -60,6 +67,7 @@ class _AddContentScreenState extends State<AddContentScreen> {
         if (mounted) {
           setState(() {
             _username = existingAuthor;
+            _email = widget.existingContent!.authorEmail;
           });
         }
         return;
@@ -151,6 +159,7 @@ class _AddContentScreenState extends State<AddContentScreen> {
         _username!,
         _selectedCategory,
         defaultType: _selectedType,
+        authorEmail: _email,
       );
       
       if (content == null) {
@@ -273,62 +282,68 @@ class _AddContentScreenState extends State<AddContentScreen> {
                   ),
                   const SizedBox(height: 16),
                   
-                  // Course category selector
-                  const Text(
-                    'Course Category:',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ChoiceChip(
-                          label: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(Icons.code, size: 18),
-                              SizedBox(width: 4),
-                              Text('Java'),
-                            ],
-                          ),
-                          selected: _selectedCategory == CourseCategory.java,
-                          onSelected: widget.existingContent == null
-                              ? (selected) {
-                                  if (selected) {
-                                    setState(() {
-                                      _selectedCategory = CourseCategory.java;
-                                    });
-                                  }
-                                }
-                              : null,
+                  // Course category selector (only show when editing)
+                  if (widget.existingContent != null)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'Course Category:',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ChoiceChip(
-                          label: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(Icons.storage, size: 18),
-                              SizedBox(width: 4),
-                              Text('DBMS'),
-                            ],
-                          ),
-                          selected: _selectedCategory == CourseCategory.dbms,
-                          onSelected: widget.existingContent == null
-                              ? (selected) {
-                                  if (selected) {
-                                    setState(() {
-                                      _selectedCategory = CourseCategory.dbms;
-                                    });
-                                  }
-                                }
-                              : null,
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ChoiceChip(
+                                label: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.code, size: 18),
+                                    SizedBox(width: 4),
+                                    Text('Java'),
+                                  ],
+                                ),
+                                selected: _selectedCategory == CourseCategory.java,
+                                onSelected: widget.existingContent == null
+                                    ? (selected) {
+                                        if (selected) {
+                                          setState(() {
+                                            _selectedCategory = CourseCategory.java;
+                                          });
+                                        }
+                                      }
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ChoiceChip(
+                                label: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.storage, size: 18),
+                                    SizedBox(width: 4),
+                                    Text('DBMS'),
+                                  ],
+                                ),
+                                selected: _selectedCategory == CourseCategory.dbms,
+                                onSelected: widget.existingContent == null
+                                    ? (selected) {
+                                        if (selected) {
+                                          setState(() {
+                                            _selectedCategory = CourseCategory.dbms;
+                                          });
+                                        }
+                                      }
+                                    : null,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+                        const SizedBox(height: 16),
+                      ],
+                    ),
                   
                   // Load template button
                   if (widget.existingContent == null)

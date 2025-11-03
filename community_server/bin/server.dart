@@ -1218,7 +1218,8 @@ void main(List<String> args) async {
         'user': {
           'id': found['id'], 
           'email': found['email'], 
-          'phone': found['phone']
+          'phone': found['phone'],
+          'username': found['username']
         }
       }), headers: {'Content-Type': 'application/json'});
       
@@ -1457,11 +1458,15 @@ void main(List<String> args) async {
         return Response.forbidden(jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});
       }
       final username = user['username'] ?? 'Unknown';
+      final email = user['email'] ?? 'unknown@email.com';
       final payload = await request.readAsString();
       final data = jsonDecode(payload) as Map<String, dynamic>;
       data['serverCreatedAt'] = DateTime.now().toIso8601String();
       data['authorId'] = userId;
+      // Override with the authenticated user's current username and email
+      data['authorName'] = username;
       data['authorUsername'] = username;
+      data['authorEmail'] = email;
       final result = await contribCollection?.insertOne(data);
       return Response.ok(
         jsonEncode({'success': result?.isSuccess ?? false, 'id': result?.id?.toHexString()}),
@@ -1525,10 +1530,11 @@ void main(List<String> args) async {
       final data = jsonDecode(payload) as Map<String, dynamic>;
       print('✅ Payload decoded, updating document...');
       
-      // Preserve serverCreatedAt, authorId, authorUsername
+      // Preserve serverCreatedAt, authorId, authorUsername, authorName
       data['serverCreatedAt'] = doc['serverCreatedAt'];
       data['authorId'] = doc['authorId'];
       data['authorUsername'] = doc['authorUsername'];
+      data['authorName'] = doc['authorName'];
       data['updatedAt'] = DateTime.now().toIso8601String();
       
       await contribCollection?.updateOne({'_id': docId}, {'\$set': data});
@@ -1869,6 +1875,140 @@ void main(List<String> args) async {
     // Check in users table (SQLite)
     final user = _dbGetUserByEmail(email);
     return Response.ok(jsonEncode({'taken': user != null}), headers: {'Content-Type': 'application/json'});
+  });
+
+  // Send OTP for account deletion
+  router.post('/api/auth/send-delete-account-otp', (Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      final email = (data['email'] as String?)?.trim().toLowerCase();
+
+      if (email == null || !email.contains('@')) {
+        return Response(400, body: jsonEncode({'error': 'Invalid email'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      // Verify user exists
+      final user = _dbGetUserByEmail(email);
+      if (user == null) {
+        print('[DELETE ACCOUNT OTP] ❌ Email not registered: $email');
+        return Response(401, body: jsonEncode({'error': 'No account found with this email address.', 'sent': false}), headers: {'Content-Type': 'application/json'});
+      }
+
+      final code = (100000 + (DateTime.now().millisecondsSinceEpoch % 899999)).toString();
+      final expires = DateTime.now().add(const Duration(minutes: 10));
+      _dbSaveEmailOtp(email, code, expires.toIso8601String(), 0);
+      print('[DELETE ACCOUNT OTP] ✅ OTP saved for $email: $code');
+
+      final subject = 'LearnEase Account Deletion OTP';
+      final body_text = 'Your LearnEase account deletion OTP is: $code\nValid for 10 minutes.\n\n⚠️ WARNING: This action is IRREVERSIBLE. All your data, contributions, and progress will be permanently deleted.';
+      final sent = await _sendEmail(email, subject, body_text);
+      print('[DELETE ACCOUNT OTP] Email send result: ' + (sent ? 'SUCCESS' : 'FAILURE'));
+      return Response.ok(jsonEncode({'sent': sent, 'message': 'OTP sent to your email'}), headers: {'Content-Type': 'application/json'});
+    } catch (e) {
+      print('[DELETE ACCOUNT OTP] Exception: $e');
+      return Response.internalServerError(body: jsonEncode({'error': 'Server error'}), headers: {'Content-Type': 'application/json'});
+    }
+  });
+
+  // Delete account with OTP verification
+  router.post('/api/auth/delete-account', (Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      final email = (data['email'] as String?)?.trim().toLowerCase();
+      final code = data['code'] as String?;
+      final authHeader = request.headers['authorization'];
+
+      if (email == null || code == null || authHeader == null) {
+        return Response(400, body: jsonEncode({'error': 'Missing email, OTP code, or auth token'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      // Verify JWT token
+      final tokenStr = authHeader.replaceFirst('Bearer ', '');
+      String? userId;
+      try {
+        final jwt = JWT.verify(tokenStr, SecretKey(jwtSecret));
+        userId = jwt.payload['sub'] as String?;
+      } on JWTExpiredException {
+        print('[DELETE ACCOUNT] ❌ JWT expired');
+        return Response(401, body: jsonEncode({'error': 'Token expired. Please login again.'}), headers: {'Content-Type': 'application/json'});
+      } catch (e) {
+        print('[DELETE ACCOUNT] ❌ JWT verification failed: $e');
+        return Response(401, body: jsonEncode({'error': 'Unauthorized'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      if (userId == null) {
+        return Response(401, body: jsonEncode({'error': 'Invalid token'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      // Verify user exists and matches
+      final user = _dbGetUserByEmail(email);
+      if (user == null) {
+        print('[DELETE ACCOUNT] ❌ User not found: $email');
+        return Response(404, body: jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      if (user['id'] != userId) {
+        print('[DELETE ACCOUNT] ❌ User ID mismatch. JWT user: $userId, Email user: ${user['id']}');
+        return Response(403, body: jsonEncode({'error': 'Cannot delete another user\'s account'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      // Verify OTP
+      final record = _dbGetEmailOtp(email);
+      if (record == null) {
+        print('[DELETE ACCOUNT] ❌ No OTP found for $email');
+        return Response(400, body: jsonEncode({'error': 'No OTP requested. Please request an OTP first.'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      if (record['code'] != code) {
+        print('[DELETE ACCOUNT] ❌ Invalid OTP for $email');
+        return Response(400, body: jsonEncode({'error': 'Invalid OTP code'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      final expires = DateTime.parse(record['expiresAt'] as String);
+      if (DateTime.now().isAfter(expires)) {
+        print('[DELETE ACCOUNT] ❌ OTP expired for $email');
+        _dbDeleteEmailOtp(email);
+        return Response(400, body: jsonEncode({'error': 'OTP has expired. Please request a new one.'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      // All verifications passed - DELETE USER AND THEIR CONTRIBUTIONS
+      try {
+        // Delete user from SQLite
+        final stmt = db.prepare('DELETE FROM users WHERE id = ?;');
+        stmt.execute([userId]);
+        print('[DELETE ACCOUNT] ✅ User deleted from database: $userId ($email)');
+
+        // Delete all contributions from MongoDB
+        if (mongoDb != null && contribCollection != null) {
+          final result = await contribCollection!.deleteMany(where.eq('authorId', userId));
+          print('[DELETE ACCOUNT] ✅ Deleted ${result.nRemoved} contributions from MongoDB');
+        }
+
+        // Delete OTP record
+        _dbDeleteEmailOtp(email);
+
+        // Delete all sessions for this user
+        final sessionStmt = db.prepare('DELETE FROM sessions WHERE user_id = ?;');
+        sessionStmt.execute([userId]);
+        print('[DELETE ACCOUNT] ✅ All sessions deleted for user: $userId');
+
+        return Response.ok(
+          jsonEncode({'success': true, 'message': 'Account and all associated data permanently deleted'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      } catch (deleteErr) {
+        print('[DELETE ACCOUNT] ❌ Error during deletion: $deleteErr');
+        return Response.internalServerError(
+          body: jsonEncode({'error': 'Error deleting account: ${deleteErr.toString()}'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+    } catch (e) {
+      print('[DELETE ACCOUNT] ❌ Exception: $e');
+      return Response.internalServerError(body: jsonEncode({'error': 'Server error'}), headers: {'Content-Type': 'application/json'});
+    }
   });
 
   // Start server

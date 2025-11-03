@@ -22,6 +22,7 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
   String? _errorMessage;
   String? _successMessage;
   String? _username;
+  String? _email;
   List<Map<String, dynamic>> _parsedItems = [];
   Set<int> _selectedIndices = {}; // Track selected items for deletion
   int _uploadedCount = 0;
@@ -34,9 +35,11 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
 
   Future<void> _loadUsername() async {
     final username = await UserContentService.getUsername();
+    final email = await UserContentService.getEmail();
     if (username != null && username.isNotEmpty) {
       setState(() {
         _username = username;
+        _email = email;
       });
       return;
     }
@@ -184,6 +187,7 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
             _username!,
             _selectedCategory,
             defaultType: _selectedType,
+            authorEmail: _email,
           );
           if (content != null) {
             contents.add(content);

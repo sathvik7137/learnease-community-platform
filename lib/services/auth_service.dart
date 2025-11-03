@@ -81,6 +81,11 @@
       return prefs.getString('user_email');
     }
 
+    Future<void> _saveUsername(String username) async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_name', username.trim());
+    }
+
     Future<Map<String, dynamic>> sendResetOtp(String email) async {
       final uri = Uri.parse('$_base/api/auth/send-reset-otp');
       
@@ -187,14 +192,29 @@
         if (data.containsKey('token') && data.containsKey('refreshToken')) {
           await saveTokens(data['token'] as String, data['refreshToken'] as String);
           await saveUserEmail(email);  // Save email after successful login
+          // Save username from response
+          final user = data['user'] as Map<String, dynamic>?;
+          if (user != null && user['username'] != null) {
+            await _saveUsername(user['username'] as String);
+          }
           print('[AuthService] ✅ OTP verified, tokens saved');
         } else if (data.containsKey('accessToken') && data.containsKey('refreshToken')) {
           await saveTokens(data['accessToken'] as String, data['refreshToken'] as String);
           await saveUserEmail(email);  // Save email after successful login
+          // Save username from response
+          final user = data['user'] as Map<String, dynamic>?;
+          if (user != null && user['username'] != null) {
+            await _saveUsername(user['username'] as String);
+          }
           print('[AuthService] ✅ OTP verified, tokens saved');
         } else if (data.containsKey('token')) {
           await saveToken(data['token'] as String);
           await saveUserEmail(email);  // Save email after successful login
+          // Save username from response
+          final user = data['user'] as Map<String, dynamic>?;
+          if (user != null && user['username'] != null) {
+            await _saveUsername(user['username'] as String);
+          }
           print('[AuthService] ✅ OTP verified, token saved');
         } else {
           print('[AuthService] ❌ No tokens in response');
@@ -570,5 +590,79 @@
         return {'error': 'Network error: $e'};
       }
     }
+
+    // Send OTP for account deletion
+    Future<Map<String, dynamic>> sendDeleteAccountOtp(String email) async {
+      final uri = Uri.parse('$_base/api/auth/send-delete-account-otp');
+      
+      int maxRetries = 3;
+      Duration timeout = const Duration(seconds: 45);
+      
+      for (int attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          print('[AuthService] Sending delete account OTP (attempt $attempt/$maxRetries) to: $email');
+          final resp = await http.post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email}),
+          ).timeout(timeout);
+          
+          final data = jsonDecode(resp.body) as Map<String, dynamic>;
+          if (resp.statusCode != 200) {
+            return {'error': data['error'] ?? 'Request failed', 'sent': false};
+          }
+          print('[AuthService] ✅ Delete account OTP sent successfully');
+          return data;
+        } catch (e) {
+          print('[AuthService] ❌ Attempt $attempt failed: $e');
+          if (attempt < maxRetries) {
+            final delaySeconds = 2 * attempt;
+            print('[AuthService] Retrying in ${delaySeconds}s...');
+            await Future.delayed(Duration(seconds: delaySeconds));
+          } else {
+            return {'error': 'Network error after $maxRetries attempts: $e'};
+          }
+        }
+      }
+      return {'error': 'Failed to send OTP after multiple attempts'};
+    }
+
+    // Delete account with OTP verification
+    Future<Map<String, dynamic>> deleteAccount(String email, String otpCode) async {
+      final uri = Uri.parse('$_base/api/auth/delete-account');
+      
+      try {
+        final token = await getToken();
+        if (token == null) {
+          return {'error': 'Not authenticated. Please login again.', 'success': false};
+        }
+        
+        print('[AuthService] Deleting account for: $email');
+        final resp = await http.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'email': email, 'code': otpCode}),
+        ).timeout(const Duration(seconds: 30));
+        
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        
+        if (resp.statusCode == 200 && data['success'] == true) {
+          print('[AuthService] ✅ Account deleted successfully');
+          // Clear all tokens after successful deletion
+          await clearTokens();
+          return {'success': true, 'message': 'Account deleted successfully'};
+        } else {
+          print('[AuthService] ❌ Delete failed: ${data['error']}');
+          return {'error': data['error'] ?? 'Failed to delete account', 'success': false};
+        }
+      } catch (e) {
+        print('[AuthService] ❌ Exception: $e');
+        return {'error': 'Network error: $e', 'success': false};
+      }
+    }
   }
+
 

@@ -38,6 +38,7 @@ class UserContentService {
   }
   static const String _contentKey = 'user_contributions';
   static const String _usernameKey = 'user_name';
+  static const String _emailKey = 'user_email';
   
   // Server URL - change this to your deployed server URL
   static const String _serverUrl = String.fromEnvironment(
@@ -61,6 +62,17 @@ class UserContentService {
   static Future<void> setUsername(String username) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_usernameKey, username.trim());
+  }
+
+  // Get or set email
+  static Future<String?> getEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_emailKey);
+  }
+  
+  static Future<void> setEmail(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_emailKey, email.trim());
   }
   
   // Get all user contributions (from server with local fallback)
@@ -354,7 +366,8 @@ class UserContentService {
     Map<String, dynamic> json,
     String authorName,
     CourseCategory category,
-    {ContentType? defaultType}
+    {ContentType? defaultType,
+    String? authorEmail}
   ) {
     try {
       // Type can come from JSON or be passed as parameter
@@ -392,6 +405,7 @@ class UserContentService {
       return UserContent(
         id: '${authorName}_${now.millisecondsSinceEpoch}',
         authorName: authorName,
+        authorEmail: authorEmail ?? 'unknown@email.com',
         type: contentType,
         category: category,
         createdAt: now,

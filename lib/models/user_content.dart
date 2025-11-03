@@ -13,6 +13,7 @@ enum CourseCategory {
 class UserContent {
   final String id;
   final String authorName;
+  final String authorEmail;
   final ContentType type;
   final CourseCategory category;
   final DateTime createdAt;
@@ -22,6 +23,7 @@ class UserContent {
   UserContent({
     required this.id,
     required this.authorName,
+    required this.authorEmail,
     required this.type,
     required this.category,
     required this.createdAt,
@@ -34,6 +36,7 @@ class UserContent {
     return {
       'id': id,
       'authorName': authorName,
+      'authorEmail': authorEmail,
       'type': type.toString().split('.').last,
       'category': category.toString().split('.').last,
       'createdAt': createdAt.toIso8601String(),
@@ -51,6 +54,7 @@ class UserContent {
     return UserContent(
       id: idString ?? 'unknown',
       authorName: json['authorName'] as String? ?? json['authorUsername'] as String? ?? 'Unknown',
+      authorEmail: json['authorEmail'] as String? ?? 'unknown@email.com',
       type: ContentType.values.firstWhere(
         (e) => e.toString().split('.').last == json['type'],
         orElse: () => ContentType.topic,
@@ -68,12 +72,14 @@ class UserContent {
   // Copy with method for updates
   UserContent copyWith({
     String? authorName,
+    String? authorEmail,
     Map<String, dynamic>? content,
     CourseCategory? category,
   }) {
     return UserContent(
       id: id,
       authorName: authorName ?? this.authorName,
+      authorEmail: authorEmail ?? this.authorEmail,
       type: type,
       category: category ?? this.category,
       createdAt: createdAt,

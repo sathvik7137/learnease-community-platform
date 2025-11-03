@@ -24,6 +24,8 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   ContentType? _filterType;
   StreamSubscription<List<UserContent>>? _realtimeSubscription;
   final AuthService _authService = AuthService();
+  String? _currentUsername;
+  String? _currentEmail;
 
   @override
   void initState() {
@@ -31,6 +33,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_loadContributions);
     _loadContributions();
+    _loadCurrentUserInfo();
     
     // Start real-time updates
     UserContentService.startRealtimeUpdates();
@@ -40,6 +43,15 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
       if (mounted) {
         _updateContributionsFromStream(allContributions);
       }
+    });
+  }
+  
+  Future<void> _loadCurrentUserInfo() async {
+    final username = await UserContentService.getUsername();
+    final email = await _authService.getUserEmail();
+    setState(() {
+      _currentUsername = username;
+      _currentEmail = email;
     });
   }
   
@@ -91,10 +103,11 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
       _showLoginPromptDialog();
     } else {
       // User is logged in, proceed to Add Content
+      final category = _tabController.index == 0 ? CourseCategory.java : CourseCategory.dbms;
       final result = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
-          builder: (context) => const AddContentScreen(),
+          builder: (context) => AddContentScreen(initialCategory: category),
         ),
       );
       if (result == true) {
@@ -115,7 +128,17 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
 
   void _selectAll() {
     setState(() {
-      _selectedIndices = Set.from(List.generate(_contributions.length, (i) => i));
+      // Only select contributions that belong to the current user
+      final ownedIndices = <int>[];
+      for (int i = 0; i < _contributions.length; i++) {
+        final content = _contributions[i];
+        final currentUsernameNormalized = _currentUsername?.trim().toLowerCase() ?? '';
+        final authorNameNormalized = content.authorName.trim().toLowerCase();
+        if (currentUsernameNormalized.isNotEmpty && currentUsernameNormalized == authorNameNormalized) {
+          ownedIndices.add(i);
+        }
+      }
+      _selectedIndices = Set.from(ownedIndices);
     });
   }
 
@@ -409,13 +432,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
                     itemCount: _contributions.length,
                     itemBuilder: (context, index) {
                       final content = _contributions[index];
-                      return FutureBuilder<Map<String, String?>>(
-                        future: _getCurrentUserInfo(),
-                        builder: (context, snapshot) {
-                          final userInfo = snapshot.data ?? {'username': null, 'email': null};
-                          return _buildContentCard(content, userInfo['username'], userInfo['email'], index);
-                        },
-                      );
+                      return _buildContentCard(content, _currentUsername, _currentEmail, index);
                     },
                   ),
                 ),
@@ -467,26 +484,18 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
       ),
     );
   }
-
-  // Helper method to get current user's info (username and email)
-  Future<Map<String, String?>> _getCurrentUserInfo() async {
-    final username = await UserContentService.getUsername();
-    final email = await _authService.getUserEmail();
-    return {'username': username, 'email': email};
-  }
-
   Widget _buildContentCard(UserContent content, String? currentUsername, String? currentEmail, int index) {
     final title = _getContentTitle(content);
     final subtitle = _getContentSubtitle(content);
     final isSelected = _selectedIndices.contains(index);
     
-    // Check ownership by comparing username OR email prefix (from old registration)
-    final isOwner = currentUsername != null && 
-                    (currentUsername.trim().toLowerCase() == content.authorName.trim().toLowerCase() ||
-                     currentEmail != null && currentEmail.split('@')[0].toLowerCase() == content.authorName.trim().toLowerCase());
+    // Check ownership by comparing username (case-insensitive, strict match only)
+    final currentUsernameNormalized = currentUsername?.trim().toLowerCase() ?? '';
+    final authorNameNormalized = content.authorName.trim().toLowerCase();
+    final isOwner = currentUsernameNormalized.isNotEmpty && currentUsernameNormalized == authorNameNormalized;
     
     // Debug: print ownership check
-    print('Current user: "$currentUsername" (email: "$currentEmail"), Content author: "${content.authorName}", Is owner: $isOwner');
+    print('Current user: "$currentUsername" → normalized: "$currentUsernameNormalized", Content author: "${content.authorName}" → normalized: "$authorNameNormalized", Is owner: $isOwner');
     
     return Card(
       margin: const EdgeInsets.only(bottom: 12.0),
@@ -495,7 +504,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
         color: isSelected ? Colors.green.withOpacity(0.1) : Colors.transparent,
         child: InkWell(
           onTap: _selectionMode
-              ? () => _toggleSelection(index)
+              ? (isOwner ? () => _toggleSelection(index) : null)
               : () => _viewContent(content),
           borderRadius: BorderRadius.circular(12),
           child: Padding(
@@ -505,7 +514,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
               children: [
                 Row(
                   children: [
-                    if (_selectionMode)
+                    if (_selectionMode && isOwner)
                       Checkbox(
                         value: isSelected,
                         onChanged: (value) {
@@ -605,7 +614,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
                     const SizedBox(width: 12),
                     Icon(Icons.person, size: 16, color: Colors.blue),
                     const SizedBox(width: 4),
-                    Text('By ${content.authorName}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.blue)),
+                    Text('By ${content.authorEmail}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.blue)),
                     const SizedBox(width: 16),
                     const Icon(Icons.access_time, size: 16),
                     const SizedBox(width: 4),
