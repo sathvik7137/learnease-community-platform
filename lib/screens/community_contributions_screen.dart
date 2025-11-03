@@ -19,13 +19,11 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   late TabController _tabController;
   bool _isLoading = false;
   List<UserContent> _contributions = [];
+  Set<int> _selectedIndices = {}; // Track selected items for deletion
+  bool _selectionMode = false; // Toggle selection mode on/off
   ContentType? _filterType;
   StreamSubscription<List<UserContent>>? _realtimeSubscription;
   final AuthService _authService = AuthService();
-  
-  // Selection mode variables
-  bool _isSelectionMode = false;
-  Set<String> _selectedContentIds = {}; // Track selected content by ID
 
   @override
   void initState() {
@@ -101,6 +99,114 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
       );
       if (result == true) {
         _loadContributions();
+      }
+    }
+  }
+
+  void _toggleSelection(int index) {
+    setState(() {
+      if (_selectedIndices.contains(index)) {
+        _selectedIndices.remove(index);
+      } else {
+        _selectedIndices.add(index);
+      }
+    });
+  }
+
+  void _selectAll() {
+    setState(() {
+      _selectedIndices = Set.from(List.generate(_contributions.length, (i) => i));
+    });
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selectedIndices.clear();
+      _selectionMode = false;
+    });
+  }
+
+  void _deleteSelected() {
+    if (_selectedIndices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No items selected for deletion')),
+      );
+      return;
+    }
+
+    final selectedCount = _selectedIndices.length;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Selected Items'),
+        content: Text('Delete $selectedCount item(s)? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              _performBulkDelete();
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _performBulkDelete() async {
+    final selectedCount = _selectedIndices.length;
+    final sortedIndices = _selectedIndices.toList()..sort((a, b) => b.compareTo(a));
+    
+    int successCount = 0;
+    int failureCount = 0;
+
+    for (final index in sortedIndices) {
+      if (index < _contributions.length) {
+        try {
+          await UserContentService.deleteContribution(_contributions[index].id);
+          successCount++;
+        } catch (e) {
+          print('Error deleting item: $e');
+          failureCount++;
+        }
+      }
+    }
+
+    setState(() {
+      _selectedIndices.clear();
+      _selectionMode = false;
+    });
+
+    // Reload contributions
+    await _loadContributions();
+
+    // Show feedback
+    if (mounted) {
+      if (successCount > 0 && failureCount == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Successfully deleted $successCount item(s)'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else if (successCount > 0 && failureCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ Deleted $successCount, failed to delete $failureCount'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('❌ Failed to delete items'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -192,114 +298,71 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     );
   }
 
-  // Toggle selection mode
-  void _toggleSelectionMode() {
-    setState(() {
-      _isSelectionMode = !_isSelectionMode;
-      if (!_isSelectionMode) {
-        _selectedContentIds.clear();
-      }
-    });
-  }
-
-  // Toggle selection of a specific item
-  void _toggleContentSelection(String contentId) {
-    setState(() {
-      if (_selectedContentIds.contains(contentId)) {
-        _selectedContentIds.remove(contentId);
-      } else {
-        _selectedContentIds.add(contentId);
-      }
-    });
-  }
-
-  // Delete all selected content
-  Future<void> _deleteSelectedContent() async {
-    if (_selectedContentIds.isEmpty) return;
-
-    final selectedCount = _selectedContentIds.length;
-
-    // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Selected Content'),
-        content: Text(
-          'Are you sure you want to delete $selectedCount item(s)? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    // Delete all selected content
-    try {
-      int successCount = 0;
-      int failureCount = 0;
-
-      for (final contentId in _selectedContentIds) {
-        final success = await UserContentService.deleteContribution(contentId);
-        if (success) {
-          successCount++;
-        } else {
-          failureCount++;
-        }
-      }
-
-      if (mounted) {
-        setState(() {
-          _selectedContentIds.clear();
-          _isSelectionMode = false;
-        });
-        await _loadContributions();
-
-        if (failureCount == 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('✅ Successfully deleted $successCount item(s)')),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('⚠️ Deleted $successCount items, failed to delete $failureCount'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error deleting content: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: _isSelectionMode
-          ? _buildSelectionModeAppBar()
-          : _buildNormalAppBar(colors, isDark),
+      appBar: _selectionMode
+          ? AppBar(
+              title: Text('${_selectedIndices.length} selected'),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _clearSelection,
+              ),
+              actions: [
+                if (_selectedIndices.length < _contributions.length)
+                  IconButton(
+                    icon: const Icon(Icons.select_all),
+                    onPressed: _selectAll,
+                    tooltip: 'Select All',
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: _deleteSelected,
+                  tooltip: 'Delete Selected',
+                ),
+              ],
+            )
+          : PreferredSize(
+              preferredSize: const Size.fromHeight(64),
+              child: Container(
+                color: isDark ? const Color(0xFF121212) : Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colors.primary.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      tabs: const [
+                        Tab(text: 'Java'),
+                        Tab(text: 'DBMS'),
+                      ],
+                      indicator: UnderlineTabIndicator(
+                        borderSide: BorderSide(
+                          color: colors.primary,
+                          width: 3.0,
+                        ),
+                      ),
+                      labelColor: colors.primary,
+                      unselectedLabelColor: colors.onSurface.withOpacity(0.5),
+                      dividerColor: colors.outline,
+                    ),
+                  ),
+                ),
+              ),
+            ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _contributions.isEmpty
@@ -315,135 +378,26 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
                         future: _getCurrentUserInfo(),
                         builder: (context, snapshot) {
                           final userInfo = snapshot.data ?? {'username': null, 'email': null};
-                          return _buildContentCard(content, userInfo['username'], userInfo['email']);
+                          return _buildContentCard(content, userInfo['username'], userInfo['email'], index);
                         },
                       );
                     },
                   ),
                 ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _handleAddContentPress,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Content'),
-        tooltip: 'Add Content',
-      ),
-    );
-  }
-
-  PreferredSize _buildNormalAppBar(ColorScheme colors, bool isDark) {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(64),
-      child: Container(
-        color: isDark ? const Color(0xFF121212) : Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: Row(
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: colors.primary.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: TabBar(
-                    controller: _tabController,
-                    tabs: const [
-                      Tab(text: 'Java'),
-                      Tab(text: 'DBMS'),
-                    ],
-                    indicator: UnderlineTabIndicator(
-                      borderSide: BorderSide(
-                        color: colors.primary,
-                        width: 3.0,
-                      ),
-                    ),
-                    labelColor: colors.primary,
-                    unselectedLabelColor: colors.onSurface.withOpacity(0.5),
-                    dividerColor: colors.outline,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Select button in menu
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'select') {
-                    _toggleSelectionMode();
-                  }
-                },
-                itemBuilder: (BuildContext context) => [
-                  const PopupMenuItem(
-                    value: 'select',
-                    child: Row(
-                      children: [
-                        Icon(Icons.check_box_outline_blank, size: 20),
-                        SizedBox(width: 8),
-                        Text('Select Items'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  PreferredSize _buildSelectionModeAppBar() {
-    final colors = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(64),
-      child: Container(
-        color: colors.primary.withOpacity(0.1),
-        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
-        child: Row(
-          children: [
-            // Cancel button
-            IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: _toggleSelectionMode,
-              tooltip: 'Cancel Selection',
+      floatingActionButton: _selectionMode
+          ? FloatingActionButton.extended(
+              onPressed: _deleteSelected,
+              icon: const Icon(Icons.delete),
+              label: Text('Delete (${_selectedIndices.length})'),
+              backgroundColor: Colors.red,
+            )
+          : FloatingActionButton.extended(
+              onPressed: _handleAddContentPress,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Content'),
+              tooltip: 'Add Content',
             ),
-            // Selection counter
-            Expanded(
-              child: Center(
-                child: Text(
-                  _selectedContentIds.isEmpty
-                      ? 'Select Items'
-                      : '${_selectedContentIds.length} Selected',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: colors.primary,
-                  ),
-                ),
-              ),
-            ),
-            // Delete button
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: _selectedContentIds.isEmpty ? null : _deleteSelectedContent,
-              color: _selectedContentIds.isEmpty
-                  ? colors.onSurface.withOpacity(0.3)
-                  : Colors.red,
-              tooltip: 'Delete Selected',
-            ),
-          ],
-        ),
-      ),
     );
-  }
   }
 
   Widget _buildEmptyState() {
@@ -486,10 +440,10 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     return {'username': username, 'email': email};
   }
 
-  Widget _buildContentCard(UserContent content, String? currentUsername, String? currentEmail) {
+  Widget _buildContentCard(UserContent content, String? currentUsername, String? currentEmail, int index) {
     final title = _getContentTitle(content);
     final subtitle = _getContentSubtitle(content);
-    final isSelected = _selectedContentIds.contains(content.id);
+    final isSelected = _selectedIndices.contains(index);
     
     // Check ownership by comparing username OR email prefix (from old registration)
     final isOwner = currentUsername != null && 
@@ -500,135 +454,135 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     print('Current user: "$currentUsername" (email: "$currentEmail"), Content author: "${content.authorName}", Is owner: $isOwner');
     
     return Card(
-      margin: EdgeInsets.only(bottom: 12.0),
-      color: isSelected ? Colors.blue.withOpacity(0.15) : null,
-      child: InkWell(
-        onTap: _isSelectionMode
-            ? () => _toggleContentSelection(content.id)
-            : () => _viewContent(content),
-        onLongPress: !_isSelectionMode ? () {
-          _toggleSelectionMode();
-          _toggleContentSelection(content.id);
-        } : null,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  // Checkbox in selection mode
-                  if (_isSelectionMode)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 12.0),
-                      child: Checkbox(
+      margin: const EdgeInsets.only(bottom: 12.0),
+      color: isSelected ? Colors.green.withOpacity(0.1) : null,
+      child: Material(
+        color: isSelected ? Colors.green.withOpacity(0.1) : Colors.transparent,
+        child: InkWell(
+          onTap: _selectionMode
+              ? () => _toggleSelection(index)
+              : () => _viewContent(content),
+          onLongPress: !_selectionMode ? () {
+            setState(() => _selectionMode = true);
+            _toggleSelection(index);
+          } : null,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    if (_selectionMode)
+                      Checkbox(
                         value: isSelected,
                         onChanged: (value) {
-                          _toggleContentSelection(content.id);
+                          _toggleSelection(index);
                         },
+                      )
+                    else
+                      _getTypeIcon(content.type),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          SizedBox(height: 4),
+                          Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                        ],
                       ),
                     ),
-                  _getTypeIcon(content.type),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                        SizedBox(height: 4),
-                        Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                      ],
-                    ),
-                  ),
-                  if (!_isSelectionMode)
-                    PopupMenuButton<String>(
-                      itemBuilder: (context) {
-                        final items = <PopupMenuEntry<String>>[
-                          PopupMenuItem<String>(
-                            value: 'view',
-                            child: Row(
-                              children: [
-                                Icon(Icons.visibility, size: 20),
-                                SizedBox(width: 8),
-                                Text('View'),
-                              ],
-                            ),
-                          ),
-                        ];
-                        if (isOwner) {
-                          items.addAll([
+                    if (!_selectionMode)
+                      PopupMenuButton<String>(
+                        itemBuilder: (context) {
+                          final items = <PopupMenuEntry<String>>[
                             PopupMenuItem<String>(
-                              value: 'edit',
+                              value: 'view',
                               child: Row(
                                 children: [
-                                  Icon(Icons.edit, size: 20),
-                                  SizedBox(width: 8),
-                                  Text('Edit'),
+                                  const Icon(Icons.visibility, size: 20),
+                                  const SizedBox(width: 8),
+                                  const Text('View'),
                                 ],
                               ),
                             ),
-                            PopupMenuItem<String>(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete, size: 20, color: Colors.red),
-                                  SizedBox(width: 8),
-                                  Text('Delete', style: TextStyle(color: Colors.red)),
-                                ],
+                          ];
+                          if (isOwner) {
+                            items.addAll([
+                              PopupMenuItem<String>(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.edit, size: 20),
+                                    const SizedBox(width: 8),
+                                    const Text('Edit'),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ]);
-                        }
-                        return items;
-                      },
-                      onSelected: (value) {
-                        switch (value) {
-                          case 'view':
-                            _viewContent(content);
-                            break;
-                          case 'edit':
-                            _editContent(content);
-                            break;
-                          case 'delete':
-                            _deleteContent(content);
-                            break;
-                        }
-                      },
+                              PopupMenuItem<String>(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.delete, size: 20, color: Colors.red),
+                                    const SizedBox(width: 8),
+                                    const Text('Delete', style: TextStyle(color: Colors.red)),
+                                  ],
+                                ),
+                              ),
+                            ]);
+                          }
+                          return items;
+                        },
+                        onSelected: (value) {
+                          switch (value) {
+                            case 'view':
+                              _viewContent(content);
+                              break;
+                            case 'edit':
+                              _editContent(content);
+                              break;
+                            case 'delete':
+                              _deleteContent(content);
+                              break;
+                          }
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    // Category badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: content.category == CourseCategory.java ? Colors.blue.withOpacity(0.1) : Colors.green.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: content.category == CourseCategory.java ? Colors.blue : Colors.green),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(content.category == CourseCategory.java ? Icons.code : Icons.storage, size: 14, color: content.category == CourseCategory.java ? Colors.blue : Colors.green),
+                          const SizedBox(width: 4),
+                          Text(content.category == CourseCategory.java ? 'Java' : 'DBMS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: content.category == CourseCategory.java ? Colors.blue : Colors.green)),
+                        ],
+                      ),
                     ),
-                ],
-              ),
-              SizedBox(height: 12),
-              Row(
-                children: [
-                  // Category badge
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: content.category == CourseCategory.java ? Colors.blue.withOpacity(0.1) : Colors.green.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: content.category == CourseCategory.java ? Colors.blue : Colors.green),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(content.category == CourseCategory.java ? Icons.code : Icons.storage, size: 14, color: content.category == CourseCategory.java ? Colors.blue : Colors.green),
-                        SizedBox(width: 4),
-                        Text(content.category == CourseCategory.java ? 'Java' : 'DBMS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: content.category == CourseCategory.java ? Colors.blue : Colors.green)),
-                      ],
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Icon(Icons.person, size: 16, color: Colors.blue),
-                  SizedBox(width: 4),
-                  Text('By ${content.authorName}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.blue)),
-                  SizedBox(width: 16),
-                  Icon(Icons.access_time, size: 16),
-                  SizedBox(width: 4),
-                  Text(_formatDate(content.createdAt), style: TextStyle(fontSize: 12)),
-                ],
-              ),
-            ],
+                    const SizedBox(width: 12),
+                    Icon(Icons.person, size: 16, color: Colors.blue),
+                    const SizedBox(width: 4),
+                    Text('By ${content.authorName}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.blue)),
+                    const SizedBox(width: 16),
+                    const Icon(Icons.access_time, size: 16),
+                    const SizedBox(width: 4),
+                    Text(_formatDate(content.createdAt), style: const TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
