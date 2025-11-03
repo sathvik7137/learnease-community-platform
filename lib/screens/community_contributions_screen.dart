@@ -326,40 +326,59 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
               ],
             )
           : PreferredSize(
-              preferredSize: const Size.fromHeight(64),
+              preferredSize: const Size.fromHeight(120),
               child: Container(
                 color: isDark ? const Color(0xFF121212) : Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: colors.primary.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Selection mode toggle
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        icon: const Icon(Icons.checkbox_outline),
+                        onPressed: () {
+                          setState(() => _selectionMode = true);
+                        },
+                        tooltip: 'Enable selection mode',
+                        constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+                        padding: EdgeInsets.zero,
+                      ),
                     ),
-                    child: TabBar(
-                      controller: _tabController,
-                      tabs: const [
-                        Tab(text: 'Java'),
-                        Tab(text: 'DBMS'),
-                      ],
-                      indicator: UnderlineTabIndicator(
-                        borderSide: BorderSide(
-                          color: colors.primary,
-                          width: 3.0,
+                    // Tab bar
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: colors.primary.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: TabBar(
+                          controller: _tabController,
+                          tabs: const [
+                            Tab(text: 'Java'),
+                            Tab(text: 'DBMS'),
+                          ],
+                          indicator: UnderlineTabIndicator(
+                            borderSide: BorderSide(
+                              color: colors.primary,
+                              width: 3.0,
+                            ),
+                          ),
+                          labelColor: colors.primary,
+                          unselectedLabelColor: colors.onSurface.withOpacity(0.5),
+                          dividerColor: colors.outline,
                         ),
                       ),
-                      labelColor: colors.primary,
-                      unselectedLabelColor: colors.onSurface.withOpacity(0.5),
-                      dividerColor: colors.outline,
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -462,10 +481,6 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
           onTap: _selectionMode
               ? () => _toggleSelection(index)
               : () => _viewContent(content),
-          onLongPress: !_selectionMode ? () {
-            setState(() => _selectionMode = true);
-            _toggleSelection(index);
-          } : null,
           borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
