@@ -372,19 +372,20 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Selection mode toggle
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton(
-                        icon: const Icon(Icons.checklist),
-                        onPressed: () {
-                          setState(() => _selectionMode = true);
-                        },
-                        tooltip: 'Enable selection mode',
-                        constraints: const BoxConstraints.tightFor(width: 48, height: 48),
-                        padding: EdgeInsets.zero,
+                    // Selection mode toggle - only show if there are contributions
+                    if (_contributions.isNotEmpty)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: IconButton(
+                          icon: const Icon(Icons.checklist),
+                          onPressed: () {
+                            setState(() => _selectionMode = true);
+                          },
+                          tooltip: 'Enable selection mode',
+                          constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+                          padding: EdgeInsets.zero,
+                        ),
                       ),
-                    ),
                     // Tab bar
                     Align(
                       alignment: Alignment.bottomCenter,
