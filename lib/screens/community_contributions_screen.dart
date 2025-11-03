@@ -337,7 +337,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
                     Align(
                       alignment: Alignment.centerLeft,
                       child: IconButton(
-                        icon: const Icon(Icons.checkbox_outline),
+                        icon: const Icon(Icons.checklist),
                         onPressed: () {
                           setState(() => _selectionMode = true);
                         },
