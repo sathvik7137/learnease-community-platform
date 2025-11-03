@@ -217,13 +217,15 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   Future<void> _deleteSelectedContent() async {
     if (_selectedContentIds.isEmpty) return;
 
+    final selectedCount = _selectedContentIds.length;
+
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Selected Content'),
         content: Text(
-          'Are you sure you want to delete ${_selectedContentIds.length} item(s)? This action cannot be undone.',
+          'Are you sure you want to delete $selectedCount item(s)? This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -245,8 +247,16 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
 
     // Delete all selected content
     try {
+      int successCount = 0;
+      int failureCount = 0;
+
       for (final contentId in _selectedContentIds) {
-        await UserContentService.deleteContent(contentId);
+        final success = await UserContentService.deleteContribution(contentId);
+        if (success) {
+          successCount++;
+        } else {
+          failureCount++;
+        }
       }
 
       if (mounted) {
@@ -254,16 +264,28 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
           _selectedContentIds.clear();
           _isSelectionMode = false;
         });
-        _loadContributions();
+        await _loadContributions();
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${_selectedContentIds.length} item(s) deleted')),
-        );
+        if (failureCount == 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('✅ Successfully deleted $successCount item(s)')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⚠️ Deleted $successCount items, failed to delete $failureCount'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error deleting content: $e')),
+          SnackBar(
+            content: Text('Error deleting content: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
