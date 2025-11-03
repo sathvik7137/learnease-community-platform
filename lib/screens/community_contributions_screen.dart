@@ -161,18 +161,29 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     final selectedCount = _selectedIndices.length;
     final sortedIndices = _selectedIndices.toList()..sort((a, b) => b.compareTo(a));
     
+    // Store item IDs before we modify the list
+    final itemsToDelete = <String>[];
+    for (final index in sortedIndices) {
+      if (index < _contributions.length) {
+        itemsToDelete.add(_contributions[index].id);
+      }
+    }
+    
     int successCount = 0;
     int failureCount = 0;
 
-    for (final index in sortedIndices) {
-      if (index < _contributions.length) {
-        try {
-          await UserContentService.deleteContribution(_contributions[index].id);
+    // Delete each item
+    for (final itemId in itemsToDelete) {
+      try {
+        final result = await UserContentService.deleteContribution(itemId);
+        if (result) {
           successCount++;
-        } catch (e) {
-          print('Error deleting item: $e');
+        } else {
           failureCount++;
         }
+      } catch (e) {
+        print('Error deleting item: $e');
+        failureCount++;
       }
     }
 
@@ -181,7 +192,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
       _selectionMode = false;
     });
 
-    // Reload contributions
+    // Reload contributions from server to get updated list
     await _loadContributions();
 
     // Show feedback
@@ -191,6 +202,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
           SnackBar(
             content: Text('✅ Successfully deleted $successCount item(s)'),
             backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
           ),
         );
       } else if (successCount > 0 && failureCount > 0) {
@@ -198,6 +210,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
           SnackBar(
             content: Text('⚠️ Deleted $successCount, failed to delete $failureCount'),
             backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
           ),
         );
       } else {
@@ -205,6 +218,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
           SnackBar(
             content: const Text('❌ Failed to delete items'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
           ),
         );
       }
