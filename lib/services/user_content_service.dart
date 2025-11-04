@@ -158,7 +158,7 @@ class UserContentService {
         .toList();
   }
 
-  // Get contributions with optional filters
+  // Get contributions with optional filters (only approved for community)
   static Future<List<UserContent>> getContributions({
     CourseCategory? category,
     ContentType? type,
@@ -168,7 +168,23 @@ class UserContentService {
     return allContributions.where((c) {
       final matchCategory = category == null || c.category == category;
       final matchType = type == null || c.type == type;
-      return matchCategory && matchType;
+      final isApproved = c.status == ContentStatus.approved;
+      return matchCategory && matchType && isApproved;
+    }).toList();
+  }
+  
+  // Get pending contributions (for admin moderation)
+  static Future<List<UserContent>> getPendingContributions({
+    CourseCategory? category,
+    ContentType? type,
+  }) async {
+    final allContributions = await getAllContributions();
+    
+    return allContributions.where((c) {
+      final matchCategory = category == null || c.category == category;
+      final matchType = type == null || c.type == type;
+      final isPending = c.status == ContentStatus.pending;
+      return matchCategory && matchType && isPending;
     }).toList();
   }
   
@@ -333,6 +349,52 @@ class UserContentService {
         print('❌ Local delete also failed: $e');
         return false;
       }
+    }
+  }
+  
+  // Approve a pending contribution
+  static Future<bool> approveContribution(String id) async {
+    try {
+      print('✅ Approving contribution: $id');
+      final response = await AuthService().authenticatedRequest(
+        'PATCH',
+        '/api/contributions/$id/approve',
+      );
+      
+      if (response.statusCode == 200) {
+        print('✅ Contribution approved on server');
+        await getAllContributions(forceRefresh: true);
+        return true;
+      } else {
+        print('❌ Server failed to approve: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Error approving contribution: $e');
+      return false;
+    }
+  }
+  
+  // Reject a pending contribution
+  static Future<bool> rejectContribution(String id) async {
+    try {
+      print('❌ Rejecting contribution: $id');
+      final response = await AuthService().authenticatedRequest(
+        'PATCH',
+        '/api/contributions/$id/reject',
+      );
+      
+      if (response.statusCode == 200) {
+        print('✅ Contribution rejected and deleted on server');
+        await getAllContributions(forceRefresh: true);
+        return true;
+      } else {
+        print('❌ Server failed to reject: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Error rejecting contribution: $e');
+      return false;
     }
   }
   

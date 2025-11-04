@@ -10,12 +10,19 @@ enum CourseCategory {
   dbms,
 }
 
+enum ContentStatus {
+  pending,
+  approved,
+  rejected,
+}
+
 class UserContent {
   final String id;
   final String authorName;
   final String authorEmail;
   final ContentType type;
   final CourseCategory category;
+  final ContentStatus status;
   final DateTime createdAt;
   final DateTime updatedAt;
   final Map<String, dynamic> content; // Flexible content structure
@@ -26,6 +33,7 @@ class UserContent {
     required this.authorEmail,
     required this.type,
     required this.category,
+    this.status = ContentStatus.pending,
     required this.createdAt,
     required this.updatedAt,
     required this.content,
@@ -39,6 +47,7 @@ class UserContent {
       'authorEmail': authorEmail,
       'type': type.toString().split('.').last,
       'category': category.toString().split('.').last,
+      'status': status.toString().split('.').last,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'content': content,
@@ -63,6 +72,10 @@ class UserContent {
         (e) => e.toString().split('.').last == (json['category'] ?? 'java'),
         orElse: () => CourseCategory.java,
       ),
+      status: ContentStatus.values.firstWhere(
+        (e) => e.toString().split('.').last == (json['status'] ?? 'pending'),
+        orElse: () => ContentStatus.pending,
+      ),
       createdAt: DateTime.parse(json['createdAt'] as String? ?? json['serverCreatedAt'] as String? ?? DateTime.now().toIso8601String()),
       updatedAt: DateTime.parse(json['updatedAt'] as String? ?? json['serverCreatedAt'] as String? ?? DateTime.now().toIso8601String()),
       content: Map<String, dynamic>.from(json['content'] as Map? ?? json),
@@ -75,6 +88,7 @@ class UserContent {
     String? authorEmail,
     Map<String, dynamic>? content,
     CourseCategory? category,
+    ContentStatus? status,
   }) {
     return UserContent(
       id: id,
@@ -82,6 +96,7 @@ class UserContent {
       authorEmail: authorEmail ?? this.authorEmail,
       type: type,
       category: category ?? this.category,
+      status: status ?? this.status,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
       content: content ?? this.content,
