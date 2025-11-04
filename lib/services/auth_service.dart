@@ -2,6 +2,7 @@
   import 'package:http/http.dart' as http;
   import 'package:google_sign_in/google_sign_in.dart';
   import 'package:shared_preferences/shared_preferences.dart';
+  import '../models/user.dart';
 
   class AuthService {
   Future<Map<String, dynamic>> sendSignupOtp(String email) async {
@@ -59,6 +60,7 @@
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('access_token');
       await prefs.remove('refresh_token');
+      await clearUserRole();
     }
 
     Future<String?> getToken() async {
@@ -84,6 +86,34 @@
     Future<void> _saveUsername(String username) async {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('user_name', username.trim());
+    }
+
+    // Save user role after authentication
+    Future<void> saveUserRole(UserRole role) async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_role', role.toString().split('.').last);
+    }
+
+    // Get user role
+    Future<UserRole> getUserRole() async {
+      final prefs = await SharedPreferences.getInstance();
+      final roleString = prefs.getString('user_role') ?? 'user';
+      return UserRole.values.firstWhere(
+        (e) => e.toString().split('.').last == roleString,
+        orElse: () => UserRole.user,
+      );
+    }
+
+    // Check if user is admin
+    Future<bool> isAdmin() async {
+      final role = await getUserRole();
+      return role == UserRole.admin;
+    }
+
+    // Clear user role
+    Future<void> clearUserRole() async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('user_role');
     }
 
     Future<Map<String, dynamic>> sendResetOtp(String email) async {
@@ -443,6 +473,53 @@
         await saveToken(data['token'] as String);
       }
       return data;
+    }
+
+    // Admin login with admin secret
+    Future<Map<String, dynamic>> adminLogin(String email, String password, String adminSecret) async {
+      final uri = Uri.parse('$_base/api/auth/admin-login');
+      try {
+        final resp = await http.post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'email': email,
+            'password': password,
+            'adminSecret': adminSecret,
+          }),
+        ).timeout(const Duration(seconds: 15));
+        
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        
+        if (resp.statusCode == 200) {
+          // Save admin token and mark user as admin
+          if (data.containsKey('token')) {
+            await saveToken(data['token'] as String);
+          }
+          if (data.containsKey('accessToken')) {
+            await saveTokens(data['accessToken'] as String, data['refreshToken'] as String? ?? '');
+          }
+          
+          // Save admin role
+          await saveUserRole(UserRole.admin);
+          await saveUserEmail(email);
+          
+          // Save username from response if provided
+          final user = data['user'] as Map<String, dynamic>?;
+          if (user != null && user['username'] != null) {
+            await _saveUsername(user['username'] as String);
+          }
+          
+          print('[AuthService] ✅ Admin login successful');
+          return {'success': true, 'isAdmin': true, ...data};
+        } else {
+          print('[AuthService] ❌ Admin login failed: ${data['error']}');
+          return {'success': false, 'error': data['error'] ?? 'Admin login failed'};
+        }
+      } catch (e) {
+        print('[AuthService] ❌ Admin login error: $e');
+        return {'success': false, 'error': 'Network error: $e'};
+      }
     }
 
     Future<Map<String, dynamic>> sendOtp(String phone) async {

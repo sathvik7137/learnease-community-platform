@@ -134,11 +134,12 @@ void _initDb() {
 }
 
 // Helper to issue JWTs with refresh token
-Map<String, String> _issueTokens(String userId, String? email) {
+Map<String, String> _issueTokens(String userId, String? email, {String role = 'user'}) {
   final accessJwt = JWT(
     {
       'sub': userId,
       'email': email,
+      'role': role,
       'iat': DateTime.now().millisecondsSinceEpoch,
       'type': 'access',
     },
@@ -148,6 +149,7 @@ Map<String, String> _issueTokens(String userId, String? email) {
   final refreshJwt = JWT(
     {
       'sub': userId,
+      'role': role,
       'iat': DateTime.now().millisecondsSinceEpoch,
       'type': 'refresh',
     },
@@ -171,6 +173,29 @@ String? _verifyJWT(String token) {
     return userId;
   } catch (e) {
     print('❌ JWT verification failed: $e');
+    return null;
+  }
+}
+
+// Helper to check if a token is from an admin user
+bool _isAdminToken(String token) {
+  try {
+    final jwt = JWT.verify(token, SecretKey(jwtSecret));
+    final role = jwt.payload['role'] as String?;
+    return role == 'admin';
+  } catch (e) {
+    print('❌ Admin check failed: $e');
+    return false;
+  }
+}
+
+// Helper to extract role from token
+String? _getTokenRole(String token) {
+  try {
+    final jwt = JWT.verify(token, SecretKey(jwtSecret));
+    return jwt.payload['role'] as String?;
+  } catch (e) {
+    print('❌ Role extraction failed: $e');
     return null;
   }
 }
@@ -746,6 +771,65 @@ void main(List<String> args) async {
       return Response.ok(jsonEncode({'token': tokens['accessToken'], 'refreshToken': tokens['refreshToken'], 'user': {'id': user['id'], 'email': user['email'], 'phone': user['phone']}}), headers: {'Content-Type': 'application/json'});
     } catch (e) {
       print('❌ [LOGIN] Exception: $e');
+      return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
+    }
+  });
+
+  // Admin login with admin secret
+  router.post('/api/auth/admin-login', (Request request) async {
+    try {
+      final body = await request.readAsString();
+      print('👨‍💼 [ADMIN_LOGIN] Raw body: $body');
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      final email = (data['email'] as String?)?.trim().toLowerCase();
+      final password = data['password'] as String?;
+      final adminSecret = data['adminSecret'] as String?;
+      
+      print('👨‍💼 [ADMIN_LOGIN] Attempt for email: $email');
+      
+      if (email == null || password == null || adminSecret == null) {
+        print('❌ [ADMIN_LOGIN] Missing credentials');
+        return Response(400, body: jsonEncode({'error': 'Missing credentials'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      // Check admin secret (from environment or hardcoded for demo)
+      final expectedAdminSecret = Platform.environment['ADMIN_SECRET'] ?? _readLocalEnvTop('ADMIN_SECRET') ?? 'admin_secret_key';
+      if (adminSecret != expectedAdminSecret) {
+        print('❌ [ADMIN_LOGIN] Invalid admin secret');
+        return Response(401, body: jsonEncode({'error': 'Invalid admin credentials'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      // Verify user credentials
+      final user = _dbGetUserByEmail(email);
+      if (user == null) {
+        print('❌ [ADMIN_LOGIN] User not found for email: $email');
+        return Response(401, body: jsonEncode({'error': 'Invalid credentials'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      final hash = user['passwordHash'] as String?;
+      if (hash == null || !BCrypt.checkpw(password, hash)) {
+        print('❌ [ADMIN_LOGIN] Password check failed for $email');
+        return Response(401, body: jsonEncode({'error': 'Invalid credentials'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      print('✅ [ADMIN_LOGIN] Password verified for $email');
+      
+      // Issue tokens with admin role
+      final tokens = _issueTokens(user['id'] as String, email, role: 'admin');
+      print('✅ [ADMIN_LOGIN] Admin tokens issued for $email');
+      
+      return Response.ok(jsonEncode({
+        'token': tokens['accessToken'],
+        'refreshToken': tokens['refreshToken'],
+        'user': {
+          'id': user['id'],
+          'email': user['email'],
+          'username': user['username'],
+          'role': 'admin'
+        }
+      }), headers: {'Content-Type': 'application/json'});
+    } catch (e) {
+      print('❌ [ADMIN_LOGIN] Exception: $e');
       return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
     }
   });
@@ -1434,6 +1518,45 @@ void main(List<String> args) async {
     );
   });
 
+  // Get pending contributions (admin only)
+  router.get('/api/contributions/pending', (Request request) async {
+    try {
+      // Extract and verify authorization token
+      final authHeader = request.headers['authorization'];
+      if (authHeader == null || !authHeader.startsWith('Bearer ')) {
+        print('❌ [PENDING] Missing or invalid authorization header');
+        return Response(401, body: jsonEncode({'error': 'Unauthorized'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      final token = authHeader.substring(7);
+      
+      // Check if user is admin
+      if (!_isAdminToken(token)) {
+        print('❌ [PENDING] User is not admin');
+        return Response(403, body: jsonEncode({'error': 'Forbidden: Admin access required'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      if (contribCollection == null) {
+        return Response.ok(
+          jsonEncode([]),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      // Get pending contributions (filter by status: 'pending')
+      final pending = await contribCollection?.find({'status': 'pending'}).toList() ?? [];
+      print('✅ [PENDING] Retrieved ${pending.length} pending contributions');
+      
+      return Response.ok(
+        jsonEncode(pending),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      print('❌ [PENDING] Exception: $e');
+      return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
+    }
+  });
+
   // Add new contribution (only for logged-in users)
   router.post('/api/contributions', (Request request) async {
     try {
@@ -1660,6 +1783,122 @@ void main(List<String> args) async {
       print('❌ Delete error: $e');
       return Response.internalServerError(
         body: jsonEncode({'error': 'Failed to delete contribution: $e'}),
+      );
+    }
+  });
+
+  // Approve contribution (admin only)
+  router.put('/api/contributions/<id>/approve', (Request request, String id) async {
+    try {
+      if (contribCollection == null) {
+        return Response(503,
+          body: jsonEncode({'error': 'MongoDB connection unavailable'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+      print('✅ [APPROVE] PUT /api/contributions/$id/approve received');
+      
+      // Extract and verify authorization token
+      final authHeader = request.headers['authorization'];
+      if (authHeader == null || !authHeader.startsWith('Bearer ')) {
+        print('❌ [APPROVE] Missing or invalid authorization header');
+        return Response(401, body: jsonEncode({'error': 'Unauthorized'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      final token = authHeader.substring(7);
+      
+      // Verify JWT and check if admin
+      final userId = _verifyJWT(token);
+      if (userId == null || !_isAdminToken(token)) {
+        print('❌ [APPROVE] User is not admin');
+        return Response(403, body: jsonEncode({'error': 'Forbidden: Admin access required'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      // Parse the ObjectId
+      ObjectId docId;
+      try {
+        docId = ObjectId.parse(id);
+      } catch (e) {
+        print('❌ [APPROVE] Failed to parse ObjectId: $id - $e');
+        return Response.badRequest(body: jsonEncode({'error': 'Invalid document ID format: $e'}));
+      }
+
+      final doc = await contribCollection?.findOne({'_id': docId});
+      if (doc == null) {
+        print('❌ [APPROVE] Document not found: $id');
+        return Response.notFound(jsonEncode({'error': 'Contribution not found'}));
+      }
+
+      // Update status to 'approved'
+      await contribCollection?.updateOne({'_id': docId}, {'\$set': {'status': 'approved'}});
+      print('✅ [APPROVE] Contribution $id approved');
+
+      return Response.ok(
+        jsonEncode({'success': true, 'status': 'approved'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      print('❌ [APPROVE] Exception: $e');
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Failed to approve contribution: $e'}),
+      );
+    }
+  });
+
+  // Reject contribution (admin only)
+  router.put('/api/contributions/<id>/reject', (Request request, String id) async {
+    try {
+      if (contribCollection == null) {
+        return Response(503,
+          body: jsonEncode({'error': 'MongoDB connection unavailable'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+      print('❌ [REJECT] PUT /api/contributions/$id/reject received');
+      
+      // Extract and verify authorization token
+      final authHeader = request.headers['authorization'];
+      if (authHeader == null || !authHeader.startsWith('Bearer ')) {
+        print('❌ [REJECT] Missing or invalid authorization header');
+        return Response(401, body: jsonEncode({'error': 'Unauthorized'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      final token = authHeader.substring(7);
+      
+      // Verify JWT and check if admin
+      final userId = _verifyJWT(token);
+      if (userId == null || !_isAdminToken(token)) {
+        print('❌ [REJECT] User is not admin');
+        return Response(403, body: jsonEncode({'error': 'Forbidden: Admin access required'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      // Parse the ObjectId
+      ObjectId docId;
+      try {
+        docId = ObjectId.parse(id);
+      } catch (e) {
+        print('❌ [REJECT] Failed to parse ObjectId: $id - $e');
+        return Response.badRequest(body: jsonEncode({'error': 'Invalid document ID format: $e'}));
+      }
+
+      final doc = await contribCollection?.findOne({'_id': docId});
+      if (doc == null) {
+        print('❌ [REJECT] Document not found: $id');
+        return Response.notFound(jsonEncode({'error': 'Contribution not found'}));
+      }
+
+      // Update status to 'rejected'
+      await contribCollection?.updateOne({'_id': docId}, {'\$set': {'status': 'rejected'}});
+      print('✅ [REJECT] Contribution $id rejected');
+
+      return Response.ok(
+        jsonEncode({'success': true, 'status': 'rejected'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      print('❌ [REJECT] Exception: $e');
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Failed to reject contribution: $e'}),
       );
     }
   });
