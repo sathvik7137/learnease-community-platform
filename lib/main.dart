@@ -9,10 +9,13 @@ import 'screens/quiz_test_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/community_contributions_screen.dart';
+import 'screens/admin_dashboard_screen.dart';
 import 'services/sound_service.dart';
 import 'providers/theme_provider.dart';
 import 'utils/app_theme.dart';
 import 'widgets/theme_toggle_button.dart';
+import 'services/auth_service.dart';
+import 'models/user.dart';
 
 Future<void> main() async {
   // Load environment variables (AI_API_BASE, AI_API_KEY) if present
@@ -58,12 +61,17 @@ class LearnEaseApp extends StatelessWidget {
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
 
+  static final GlobalKey<_MainNavigationState> globalKey = GlobalKey<_MainNavigationState>();
+
   @override
   State<MainNavigation> createState() => _MainNavigationState();
 }
 
-class _MainNavigationState extends State<MainNavigation> {
+class _MainNavigationState extends State<MainNavigation> with WidgetsBindingObserver {
   int _selectedIndex = 0;
+  bool _isAdmin = false;
+  bool _isInitialized = false;
+  
   final List<Widget> _screens = [
     const HomeScreen(),
     CoursesScreen(),
@@ -72,10 +80,144 @@ class _MainNavigationState extends State<MainNavigation> {
     ProfileScreen(),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Start with checking admin status with delay
+    _checkAdminStatus();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      print('[MainNav] App resumed, checking admin status');
+      _checkAdminStatus();
+    }
+  }
+
+  @override
+  void didUpdateWidget(MainNavigation oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    print('[MainNav] Widget updated, checking admin status');
+    // After widget update, schedule a check for next frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _forceCheckAdminStatus();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<void> _checkAdminStatus() async {
+    try {
+      // Force a fresh check - wait longer for JWT token to be properly saved to storage
+      // This is critical because SharedPreferences might take time to write to disk
+      print('[MainNav] ⏳ Checking admin status with 1000ms delay...');
+      await Future.delayed(const Duration(milliseconds: 1000));
+      
+      final role = await AuthService().getUserRole();
+      print('[MainNav] Current role: $role');
+      
+      final isAdmin = role == UserRole.admin;
+      print('[MainNav] Is admin: $isAdmin, Previous: $_isAdmin');
+      
+      if ((_isAdmin != isAdmin || !_isInitialized) && mounted) {
+        print('[MainNav] ✅ Admin status changed! Setting _isAdmin = $isAdmin');
+        setState(() {
+          _isAdmin = isAdmin;
+          _isInitialized = true;
+          
+          // If newly admin, navigate to dashboard
+          if (isAdmin) {
+            _selectedIndex = 4;
+            print('[MainNav] 🎯 Navigated to admin dashboard (index=4)');
+          }
+        });
+      } else if (_isInitialized && mounted) {
+        // Already initialized, just ensure state is updated
+        print('[MainNav] Already initialized');
+        setState(() {
+          // Trigger rebuild to refresh UI
+        });
+      }
+    } catch (e) {
+      print('[MainNav] ❌ Error checking admin status: $e');
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _forceCheckAdminStatus() async {
+    print('[MainNav] 🔥 FORCE CHECK - Admin status immediately');
+    try {
+      // Brief delay to ensure persistence
+      await Future.delayed(const Duration(milliseconds: 200));
+      
+      final role = await AuthService().getUserRole();
+      final token = await AuthService().getToken();
+      print('[MainNav] Force check - Current role: $role, HasToken: ${token != null}');
+      
+      final isAdmin = role == UserRole.admin;
+      print('[MainNav] Force check - Is admin: $isAdmin, Previous: $_isAdmin');
+      
+      if (mounted) {
+        // Update state with new values
+        setState(() {
+          _isAdmin = isAdmin;
+          _isInitialized = true;
+          
+          if (isAdmin) {
+            _selectedIndex = 4;
+            print('[MainNav] 🚀 Force check - Navigated to admin dashboard (index=4)');
+          } else {
+            _selectedIndex = 0;
+            print('[MainNav] Force check - Not admin, navigated to home (index=0)');
+          }
+        });
+        
+        // Force another rebuild to ensure UI updates
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (mounted) {
+          setState(() {
+            // Trigger rebuild
+          });
+          print('[MainNav] ✅ Force check complete and rebuilt');
+        }
+      }
+    } catch (e) {
+      print('[MainNav] Force check error: $e');
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+    }
+  }
+
+  /// Public method to force immediate admin check - called from ProfileScreen after admin login
+  void forceCheckAdminStatusImmediate() {
+    print('[MainNav] 🔴 PUBLIC FORCE CHECK called from ProfileScreen - executing immediately');
+    _forceCheckAdminStatus();
+  }
+
   void _onItemTapped(int index) {
     // Play sound and haptic feedback
     SoundService.selectionHaptic();
     SoundService.playTapSound();
+    
+    // If clicking on profile and user is admin, ensure we show admin dashboard
+    if (index == 4) {
+      _checkAdminStatus();
+    }
     
     setState(() {
       _selectedIndex = index;
@@ -112,13 +254,39 @@ class _MainNavigationState extends State<MainNavigation> {
               },
             ),
             const SizedBox(width: 10),
-            Text(
-              'LearnEase',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: colors.onSurface,
-              ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'LearnEase',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: colors.onSurface,
+                  ),
+                ),
+                if (_isAdmin)
+                  Row(
+                    children: [
+                      Text(
+                        'Admin Mode',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.amber[700],
+                        ),
+                      ),
+                      Text(
+                        ' [Index: $_selectedIndex, Init: $_isInitialized]',
+                        style: TextStyle(
+                          fontSize: 8,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
             ),
           ],
         ),
@@ -126,7 +294,59 @@ class _MainNavigationState extends State<MainNavigation> {
           ThemeToggleButton(size: 26, padding: EdgeInsets.only(right: 16)),
         ],
       ),
-      body: _screens[_selectedIndex],
+      body: Builder(
+        builder: (context) {
+          print('[MainNav] 🔨 Rendering body - _isInitialized=$_isInitialized, _isAdmin=$_isAdmin, _selectedIndex=$_selectedIndex');
+          
+          if (!_isInitialized) {
+            print('[MainNav] ⏳ Not initialized yet, waiting...');
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Initializing...', style: TextStyle(fontSize: 16)),
+                ],
+              ),
+            );
+          }
+          
+          // Show AdminDashboardScreen if admin and on profile tab (index 4)
+          if (_isAdmin && _selectedIndex == 4) {
+            print('[MainNav] 📊 Showing AdminDashboardScreen');
+            try {
+              return AdminDashboardScreen();
+            } catch (e) {
+              print('[MainNav] ❌ Error showing AdminDashboardScreen: $e');
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error, color: Colors.red, size: 48),
+                    const SizedBox(height: 16),
+                    Text('Error loading admin dashboard: $e'),
+                  ],
+                ),
+              );
+            }
+          } else if (_isAdmin && _selectedIndex != 4) {
+            // If admin but on a different tab, show that screen
+            print('[MainNav] 📱 Admin on different tab - Showing screen[$_selectedIndex]');
+            return _screens[_selectedIndex];
+          } else {
+            // Not admin, show regular screens
+            print('[MainNav] 📱 Showing screen[$_selectedIndex]');
+            // Safety check: if selectedIndex is out of bounds, show home
+            if (_selectedIndex >= 0 && _selectedIndex < _screens.length) {
+              return _screens[_selectedIndex];
+            } else {
+              print('[MainNav] ⚠️ Index out of bounds, showing home screen');
+              return _screens[0]; // Home screen
+            }
+          }
+        },
+      ),
       extendBody: false,
       bottomNavigationBar: Container(
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -182,7 +402,7 @@ class _MainNavigationState extends State<MainNavigation> {
                     _buildNavItem(1, Icons.menu_book_outlined, Icons.menu_book_rounded, 'Courses'),
                     _buildNavItem(2, Icons.people_outline, Icons.people_rounded, 'Community'),
                     _buildNavItem(3, Icons.quiz_outlined, Icons.quiz_rounded, 'Quiz'),
-                    _buildNavItem(4, Icons.person_outline_rounded, Icons.person_rounded, 'Profile'),
+                    _buildNavItem(4, Icons.admin_panel_settings_outlined, Icons.admin_panel_settings, _isAdmin ? 'Admin' : 'Profile'),
                   ],
                 ),
               ),

@@ -357,7 +357,7 @@ class UserContentService {
     try {
       print('✅ Approving contribution: $id');
       final response = await AuthService().authenticatedRequest(
-        'PATCH',
+        'PUT',
         '/api/contributions/$id/approve',
       );
       
@@ -366,7 +366,7 @@ class UserContentService {
         await getAllContributions(forceRefresh: true);
         return true;
       } else {
-        print('❌ Server failed to approve: ${response.body}');
+        print('❌ Server failed to approve: ${response.statusCode} - ${response.body}');
         return false;
       }
     } catch (e) {
@@ -380,7 +380,7 @@ class UserContentService {
     try {
       print('❌ Rejecting contribution: $id');
       final response = await AuthService().authenticatedRequest(
-        'PATCH',
+        'PUT',
         '/api/contributions/$id/reject',
       );
       
@@ -389,7 +389,7 @@ class UserContentService {
         await getAllContributions(forceRefresh: true);
         return true;
       } else {
-        print('❌ Server failed to reject: ${response.body}');
+        print('❌ Server failed to reject: ${response.statusCode} - ${response.body}');
         return false;
       }
     } catch (e) {

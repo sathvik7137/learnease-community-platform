@@ -8,8 +8,10 @@ import 'sign_in_screen.dart';
 import 'sign_up_screen.dart';
 import 'edit_profile_screen.dart';
 import 'settings_screen.dart';
+import 'admin_login_screen.dart';
 import '../widgets/theme_toggle_widget.dart';
 import 'package:provider/provider.dart';
+import '../main.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -516,6 +518,43 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           ),
                         ),
                       ],
+                    ),
+                    SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepPurple,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AdminLoginScreen(
+                                onLoginSuccess: () async {
+                                  print('[ProfileScreen] 🔓 Admin login successful!');
+                                  // Only trigger admin check; do not pop any routes here.
+                                  if (mounted) {
+                                    final mainNavState = MainNavigation.globalKey.currentState;
+                                    if (mainNavState != null) {
+                                      mainNavState.forceCheckAdminStatusImmediate();
+                                    } else {
+                                      print('[ProfileScreen] ⚠️ MainNavigation state is null');
+                                    }
+                                  }
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                        icon: Icon(Icons.admin_panel_settings),
+                        label: Text('Admin Login'),
+                      ),
                     ),
                   ],
                 )

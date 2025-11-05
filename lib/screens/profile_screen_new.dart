@@ -4,6 +4,7 @@ import '../services/local_storage.dart';
 import '../services/user_content_service.dart';
 import '../services/auth_service.dart';
 import '../widgets/theme_toggle_widget.dart';
+import 'admin_login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -135,15 +136,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
             email,
             style: TextStyle(color: Colors.grey),
           ),
-          SizedBox(height: 8),
-          OutlinedButton.icon(
-            icon: Icon(Icons.edit),
-            label: Text('Edit Profile'),
-            onPressed: () {},
+          SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                icon: Icon(Icons.edit),
+                label: Text('Edit Profile'),
+                onPressed: () {},
+              ),
+              SizedBox(width: 12),
+              ElevatedButton.icon(
+                icon: Icon(Icons.admin_panel_settings),
+                label: Text('Admin Login'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AdminLoginScreen(
+                        onLoginSuccess: _handleAdminLoginSuccess,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  void _handleAdminLoginSuccess() {
+  // No-op here; MainNavigation listens for role change.
   }
 
   Widget _buildProgressSection() {

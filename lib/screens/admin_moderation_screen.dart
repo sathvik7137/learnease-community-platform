@@ -103,82 +103,231 @@ class _AdminModerationScreenState extends State<AdminModerationScreen> {
     showDialog(
       context: context,
       builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(20.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Review Contribution',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                // Header
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.blue.shade100,
+                      ),
+                      child: Icon(
+                        _getContentIcon(content.type),
+                        color: Colors.blue,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Review Contribution',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            'Decide to approve or reject',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                      splashRadius: 20,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                // Display content details
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Author: ${content.authorName}',
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Type: ${_getTypeLabel(content.type)}',
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Category: ${_getCategoryLabel(content.category)}',
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                        const SizedBox(height: 12),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey),
-                            borderRadius: BorderRadius.circular(4),
+                const SizedBox(height: 20),
+                
+                // Author & Meta Information
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.person, size: 20, color: Colors.blue),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Author',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                Text(
+                                  content.authorName,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          child: Text(
-                            'Content: ${_truncateContent(content.content.toString())}',
-                            style: const TextStyle(fontSize: 12),
-                            maxLines: 5,
-                            overflow: TextOverflow.ellipsis,
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Type',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                Text(
+                                  _getTypeLabel(content.type),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Category',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                Text(
+                                  _getCategoryLabel(content.category),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(Icons.schedule, size: 16, color: Colors.grey[600]),
+                          const SizedBox(width: 8),
+                          Text(
+                            content.createdAt.toString().split('.')[0],
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Content Display
+                Text(
+                  'Content',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.white,
+                  ),
+                  child: Text(
+                    content.content.toString(),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.5,
+                      color: Colors.black87,
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
-                // Action buttons
+                const SizedBox(height: 24),
+
+                // Action Buttons
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _approveContribution(content.id);
-                      },
-                      icon: const Icon(Icons.check),
-                      label: const Text('Approve'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _approveContribution(content.id);
+                        },
+                        icon: const Icon(Icons.check_circle),
+                        label: const Text('Approve'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
                       ),
                     ),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _rejectContribution(content.id);
-                      },
-                      icon: const Icon(Icons.close),
-                      label: const Text('Reject'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _rejectContribution(content.id);
+                        },
+                        icon: const Icon(Icons.cancel),
+                        label: const Text('Reject'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
                       ),
                     ),
                   ],

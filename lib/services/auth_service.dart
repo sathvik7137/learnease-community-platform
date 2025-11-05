@@ -475,8 +475,8 @@
       return data;
     }
 
-    // Admin login with admin secret
-    Future<Map<String, dynamic>> adminLogin(String email, String password, String adminSecret) async {
+    // Admin login with passkey instead of OTP
+    Future<Map<String, dynamic>> adminLogin(String email, String password, String passkey) async {
       final uri = Uri.parse('$_base/api/auth/admin-login');
       try {
         final resp = await http.post(
@@ -485,7 +485,7 @@
           body: jsonEncode({
             'email': email,
             'password': password,
-            'adminSecret': adminSecret,
+            'passkey': passkey,
           }),
         ).timeout(const Duration(seconds: 15));
         

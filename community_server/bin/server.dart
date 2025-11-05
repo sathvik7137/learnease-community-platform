@@ -309,6 +309,7 @@ Map<String, dynamic>? _dbGetUserByEmail(String email) {
     'googleId': row['google_id'] as String?,
     'createdAt': row['created_at'] as String?,
     'username': row['username'] as String?,
+    'admin_passkey': row['admin_passkey'] as String?,
   };
 }
 
@@ -775,7 +776,7 @@ void main(List<String> args) async {
     }
   });
 
-  // Admin login with admin secret
+  // Admin login with passkey verification
   router.post('/api/auth/admin-login', (Request request) async {
     try {
       final body = await request.readAsString();
@@ -783,20 +784,13 @@ void main(List<String> args) async {
       final data = jsonDecode(body) as Map<String, dynamic>;
       final email = (data['email'] as String?)?.trim().toLowerCase();
       final password = data['password'] as String?;
-      final adminSecret = data['adminSecret'] as String?;
+      final passkey = data['passkey'] as String?;
       
       print('👨‍💼 [ADMIN_LOGIN] Attempt for email: $email');
       
-      if (email == null || password == null || adminSecret == null) {
+      if (email == null || password == null || passkey == null) {
         print('❌ [ADMIN_LOGIN] Missing credentials');
         return Response(400, body: jsonEncode({'error': 'Missing credentials'}), headers: {'Content-Type': 'application/json'});
-      }
-
-      // Check admin secret (from environment or hardcoded for demo)
-      final expectedAdminSecret = Platform.environment['ADMIN_SECRET'] ?? _readLocalEnvTop('ADMIN_SECRET') ?? 'admin_secret_key';
-      if (adminSecret != expectedAdminSecret) {
-        print('❌ [ADMIN_LOGIN] Invalid admin secret');
-        return Response(401, body: jsonEncode({'error': 'Invalid admin credentials'}), headers: {'Content-Type': 'application/json'});
       }
 
       // Verify user credentials
@@ -806,6 +800,7 @@ void main(List<String> args) async {
         return Response(401, body: jsonEncode({'error': 'Invalid credentials'}), headers: {'Content-Type': 'application/json'});
       }
       
+      // Verify password
       final hash = user['passwordHash'] as String?;
       if (hash == null || !BCrypt.checkpw(password, hash)) {
         print('❌ [ADMIN_LOGIN] Password check failed for $email');
@@ -813,6 +808,15 @@ void main(List<String> args) async {
       }
       
       print('✅ [ADMIN_LOGIN] Password verified for $email');
+      
+      // Verify admin passkey
+      final adminPasskeyHash = user['admin_passkey'] as String?;
+      if (adminPasskeyHash == null || !BCrypt.checkpw(passkey, adminPasskeyHash)) {
+        print('❌ [ADMIN_LOGIN] Invalid passkey for $email');
+        return Response(401, body: jsonEncode({'error': 'Invalid passkey'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      print('✅ [ADMIN_LOGIN] Passkey verified for $email');
       
       // Issue tokens with admin role
       final tokens = _issueTokens(user['id'] as String, email, role: 'admin');
@@ -1501,6 +1505,61 @@ void main(List<String> args) async {
       jsonEncode(all),
       headers: {'Content-Type': 'application/json'},
     );
+  });
+
+  // Public stats endpoint (no authentication required)
+  router.get('/api/stats/public', (Request request) async {
+    try {
+      print('🔵 [PUBLIC_STATS] Fetching platform statistics');
+      
+      // Get total users (excluding admin)
+      int totalUsers = 0;
+      try {
+        final userCount = db.select('SELECT COUNT(*) as count FROM users WHERE admin_passkey IS NULL');
+        totalUsers = (userCount.isNotEmpty ? userCount.first['count'] as int : 0);
+      } catch (e) {
+        print('⚠️ Could not count users: $e');
+      }
+
+      // Get contribution stats
+      int totalContributions = 0;
+      int pendingContributions = 0;
+      int approvedContributions = 0;
+      int rejectedContributions = 0;
+
+      if (contribCollection != null) {
+        try {
+          final allContribs = await contribCollection?.find().toList() ?? [];
+          totalContributions = allContribs.length;
+          
+          final pending = await contribCollection?.find({'status': 'pending'}).toList() ?? [];
+          pendingContributions = pending.length;
+          
+          final approved = await contribCollection?.find({'status': 'approved'}).toList() ?? [];
+          approvedContributions = approved.length;
+          
+          final rejected = await contribCollection?.find({'status': 'rejected'}).toList() ?? [];
+          rejectedContributions = rejected.length;
+        } catch (e) {
+          print('⚠️ Could not get contribution stats: $e');
+        }
+      }
+
+      final stats = {
+        'totalUsers': totalUsers,
+        'totalContributions': totalContributions,
+        'pendingContributions': pendingContributions,
+        'approvedContributions': approvedContributions,
+        'rejectedContributions': rejectedContributions,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      print('✅ [PUBLIC_STATS] Stats: $stats');
+      return Response.ok(jsonEncode(stats), headers: {'Content-Type': 'application/json'});
+    } catch (e) {
+      print('❌ [PUBLIC_STATS] Exception: $e');
+      return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
+    }
   });
 
   // Get contributions by category

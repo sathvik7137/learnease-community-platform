@@ -102,7 +102,7 @@ class _SignInScreenState extends State<SignInScreen> {
       Future.delayed(const Duration(milliseconds: 1500), () {
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => MainNavigation()),
+            MaterialPageRoute(builder: (_) => MainNavigation(key: MainNavigation.globalKey)),
             (route) => false,
           );
         }

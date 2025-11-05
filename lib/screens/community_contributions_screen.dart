@@ -15,9 +15,12 @@ class CommunityContributionsScreen extends StatefulWidget {
   State<CommunityContributionsScreen> createState() => _CommunityContributionsScreenState();
 }
 
-class _CommunityContributionsScreenState extends State<CommunityContributionsScreen> with SingleTickerProviderStateMixin {
+class _CommunityContributionsScreenState extends State<CommunityContributionsScreen> with SingleTickerProviderStateMixin, TickerProviderStateMixin {
   late TabController _tabController;
+  late AnimationController _loadingAnimController;
   bool _isLoading = false;
+  int _loadingSeconds = 0;
+  Timer? _loadingTimer;
   List<UserContent> _contributions = [];
   Set<int> _selectedIndices = {}; // Track selected items for deletion
   bool _selectionMode = false; // Toggle selection mode on/off
@@ -26,12 +29,26 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   final AuthService _authService = AuthService();
   String? _currentUsername;
   String? _currentEmail;
+  
+  // Aggressive caching mechanism
+  static final Map<String, List<UserContent>> _globalContributionCache = {};
+  static final Map<String, DateTime> _globalLastFetchTime = {};
+  static const Duration _cacheValidityDuration = Duration(minutes: 10);
+  
+  // Track if we're currently fetching to prevent duplicate requests
+  static final Map<String, bool> _isFetching = {};
+  bool _hasMadeInitialFetch = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(_loadContributions);
+    _loadingAnimController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat();
+    
+    _tabController.addListener(_onTabChanged);
     _loadContributions();
     _loadCurrentUserInfo();
     
@@ -44,6 +61,12 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
         _updateContributionsFromStream(allContributions);
       }
     });
+  }
+  
+  void _onTabChanged() {
+    print('[Community] Tab changed to index ${_tabController.index}');
+    // Only load if we don't have cached data or it's stale
+    _loadContributions();
   }
   
   Future<void> _loadCurrentUserInfo() async {
@@ -59,7 +82,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
       _currentEmail = isLoggedIn ? email : null;
     });
     
-    print('Auth check - Token exists: ${token != null}, Username: $username, Email: $email, Logged in: $isLoggedIn');
+    print('[Community] Auth check - Token: ${token?.isNotEmpty}, Username: $username, LoggedIn: $isLoggedIn');
   }
   
   void _updateContributionsFromStream(List<UserContent> allContributions) {
@@ -70,11 +93,26 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
       return matchCategory && matchType;
     }).toList();
     
+    // Update global cache with new data from stream
+    final cacheKey = _getCacheKey(category);
+    print('[Community] Stream update: $cacheKey got ${filtered.length} items');
+    _globalContributionCache[cacheKey] = filtered;
+    _globalLastFetchTime[cacheKey] = DateTime.now();
+    
     if (mounted) {
       setState(() {
         _contributions = filtered;
+        // Stop loading if we got contributions from stream
+        if (_isLoading && filtered.isNotEmpty) {
+          _isLoading = false;
+          _loadingTimer?.cancel();
+        }
       });
     }
+  }
+  
+  String _getCacheKey(CourseCategory category) {
+    return '${category.toString()}_${_filterType?.toString() ?? 'all'}';
   }
   
   @override
@@ -82,17 +120,114 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     _tabController.dispose();
     _realtimeSubscription?.cancel();
     UserContentService.stopRealtimeUpdates();
+    _loadingAnimController.dispose();
+    _loadingTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _loadContributions() async {
-    setState(() => _isLoading = true);
     final category = _tabController.index == 0 ? CourseCategory.java : CourseCategory.dbms;
-    final contributions = await UserContentService.getContributions(category: category, type: _filterType);
-    setState(() {
-      _contributions = contributions;
-      _isLoading = false;
+    final cacheKey = _getCacheKey(category);
+    
+    // Check if we're already fetching this category to prevent duplicates
+    if (_isFetching[cacheKey] == true) {
+      print('[Community] ⏭️ Already fetching $cacheKey, skipping duplicate request');
+      return;
+    }
+    
+    // Check if we have cached data
+    final cachedData = _globalContributionCache[cacheKey];
+    final lastFetch = _globalLastFetchTime[cacheKey];
+    final isCacheFresh = lastFetch != null && DateTime.now().difference(lastFetch) < _cacheValidityDuration;
+    
+    print('[Community] Cache check for $cacheKey: cached=${cachedData != null}, fresh=$isCacheFresh, age=${lastFetch != null ? DateTime.now().difference(lastFetch).inSeconds : 'N/A'}s');
+    
+    // If cache is fresh and we have data, use it immediately without loading indicator or fetching
+    if (cachedData != null && isCacheFresh) {
+      print('[Community] ✅ Fresh cache hit for $cacheKey, showing ${cachedData.length} items instantly');
+      if (mounted) {
+        setState(() {
+          _contributions = cachedData;
+          _isLoading = false;
+          _hasMadeInitialFetch = true;
+        });
+      }
+      return;
+    }
+    
+    // If we have cached data but it's stale, show it while fetching in background
+    if (cachedData != null && !isCacheFresh) {
+      print('[Community] 📦 Stale cache for $cacheKey, showing cached ${cachedData.length} items while refreshing');
+      if (mounted) {
+        setState(() {
+          _contributions = cachedData;
+          _isLoading = true;
+          _loadingSeconds = 0;
+          _hasMadeInitialFetch = true;
+        });
+      }
+    } else {
+      // No cached data, show loading
+      print('[Community] ⏳ No cache for $cacheKey, showing loading indicator');
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          _loadingSeconds = 0;
+        });
+      }
+    }
+    
+    // Mark as fetching
+    _isFetching[cacheKey] = true;
+    
+    // Start elapsed time counter (for accurate timing display)
+    _loadingTimer?.cancel();
+    int elapsedSeconds = 0;
+    _loadingTimer = Timer.periodic(Duration(milliseconds: 100), (timer) {
+      elapsedSeconds++;
+      if (mounted) {
+        setState(() => _loadingSeconds = (elapsedSeconds / 10).ceil());
+      }
     });
+    
+    try {
+      print('[Community] 🔄 Fetching fresh data for $cacheKey...');
+      // Fetch fresh data
+      final contributions = await UserContentService.getContributions(category: category, type: _filterType);
+      
+      // Stop timer immediately
+      _loadingTimer?.cancel();
+      
+      // Update global cache and timestamp
+      _globalContributionCache[cacheKey] = contributions;
+      _globalLastFetchTime[cacheKey] = DateTime.now();
+      
+      print('[Community] ✅ Fresh fetch complete for $cacheKey, got ${contributions.length} items');
+      
+      // Update contributions and hide loading
+      if (mounted) {
+        setState(() {
+          _contributions = contributions;
+          _isLoading = false;
+          _loadingSeconds = 0;
+          _hasMadeInitialFetch = true;
+        });
+      }
+    } catch (e) {
+      // Stop timer on error
+      _loadingTimer?.cancel();
+      
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _loadingSeconds = 0;
+        });
+      }
+      print('[Community] ❌ Error loading contributions for $cacheKey: $e');
+    } finally {
+      // Clear fetching flag
+      _isFetching[cacheKey] = false;
+    }
   }
 
   // Check if user is logged in
@@ -430,7 +565,7 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
               ),
             ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? _buildLoadingState()
           : _contributions.isEmpty
               ? _buildEmptyState()
               : RefreshIndicator(
@@ -457,6 +592,49 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
               label: const Text('Add Content'),
               tooltip: 'Add Content',
             ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Animated rotating spinner
+            RotationTransition(
+              turns: _loadingAnimController,
+              child: Icon(
+                Icons.refresh,
+                size: 64,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Loading text
+            const Text(
+              'Fetching contributions...',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            // Elapsed time counter
+            Text(
+              'Loading ${_loadingSeconds}s...',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
