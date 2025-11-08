@@ -21,7 +21,7 @@ void main() async {
     final data = jsonDecode(loginResp.body);
     print('   Token: ${(data['token'] as String).substring(0, 30)}...');
   } else {
-    print('❌ FAILED: Status +"${loginResp.statusCode}"+"'');
+    print('❌ FAILED: Status ${loginResp.statusCode}');
   }
   // Test 2: OTP-Based Login (Step 1)
   print('\n─── TEST 2: Send OTP ───');
@@ -47,12 +47,12 @@ void main() async {
       final verifyData = jsonDecode(verifyResp.body);
       print('   Token received: ${verifyData.containsKey('token') || verifyData.containsKey('accessToken')}');
     } else {
-      print('❌ FAILED: Status +"${verifyResp.statusCode}"+"'');
-      print('   Response: +"${verifyResp.body}"+"');
+      print('❌ FAILED: Status ${verifyResp.statusCode}');
+      print('   Response: ${verifyResp.body}');
     }
   } else {
-    print('❌ FAILED: Status +"${otpResp.statusCode}"+"'');
-    print('   Response: +"${otpResp.body}"+"');
+    print('❌ FAILED: Status ${otpResp.statusCode}');
+    print('   Response: ${otpResp.body}');
   }
   print('\n╔═════════════════════════════════════════════════════════╗');
   print('║  ✅ ALL AUTHENTICATION FLOWS ARE WORKING PERFECTLY!    ║');

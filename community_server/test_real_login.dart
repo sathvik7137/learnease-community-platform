@@ -11,14 +11,14 @@ void main() async {
     headers: {'Content-Type': 'application/json'},
     body: jsonEncode({'email': email, 'password': password}),
   );
-  print('Direct Login: Status +"${resp.statusCode}"+"'');
+  print('Direct Login: Status ${resp.statusCode}');
   if (resp.statusCode == 200) {
     print('SUCCESS - Token issued');
     final data = jsonDecode(resp.body);
     if (data['user'] != null) {
-      print('User: +"${data['user']['email']}"+"'');
+      print('User: ${data['user']['email']}');
     }
   } else {
-    print('FAILED: +"${resp.body}"+"'');
+    print('FAILED: ${resp.body}');
   }
 }

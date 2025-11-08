@@ -1,6 +1,6 @@
 ﻿import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:io';
+
 void main() async {
   // Test 1: Send Signup OTP
   print('📧 Test 1: Sending signup OTP...');
@@ -12,11 +12,11 @@ void main() async {
     headers: {'Content-Type': 'application/json'},
     body: sendOtpBody,
   );
-  print('  Status: +"${sendResponse.statusCode}"+"');
-  print('  Email: +"$email"+"');
+  print('  Status: ${sendResponse.statusCode}');
+  print('  Email: $email');
   if (sendResponse.statusCode == 200) {
     final responseData = jsonDecode(sendResponse.body);
-    print('  Response: +"$responseData"+"');
+    print('  Response: $responseData');
     print('  ✅ OTP sent!');
     // Wait a moment
     await Future.delayed(Duration(seconds: 1));
@@ -24,6 +24,6 @@ void main() async {
     print('\n📝 Please check server logs for OTP code...');
     print('Then we can verify the signup');
   } else {
-    print('  ❌ Error: +"${sendResponse.body}"+"');
+    print('  ❌ Error: ${sendResponse.body}');
   }
 }

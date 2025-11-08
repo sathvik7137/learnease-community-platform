@@ -11,11 +11,11 @@ void main() async {
     headers: {'Content-Type': 'application/json'},
     body: sendResetBody,
   );
-  print('  Status: +"${sendResetResponse.statusCode}"+"');
-  print('  Response: +"${sendResetResponse.body.substring(0, 100)}"+"');
+  print('  Status: ${sendResetResponse.statusCode}');
+  print('  Response: ${sendResetResponse.body.substring(0, 100)}');
   if (sendResetResponse.statusCode == 200) {
     final resetData = jsonDecode(sendResetResponse.body);
-    print('  OTP sent: +"${resetData['sent']}"+"');
-    print('  OTP code: +"${resetData['code']}"+"' (check server logs)');
+    print('  OTP sent: ${resetData['sent']}');
+    print('  OTP code: ${resetData['code']} (check server logs)');
   }
 }

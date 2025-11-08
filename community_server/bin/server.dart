@@ -196,17 +196,6 @@ bool _isAdminToken(String token) {
   }
 }
 
-// Helper to extract role from token
-String? _getTokenRole(String token) {
-  try {
-    final jwt = JWT.verify(token, SecretKey(jwtSecret));
-    return jwt.payload['role'] as String?;
-  } catch (e) {
-    print('❌ Role extraction failed: $e');
-    return null;
-  }
-}
-
 // Helper to check if two user IDs belong to the same person (by email)
 // This handles cases where a user's account was migrated and got a new UUID
 bool _isSameUser(String userId1, String userId2) {
