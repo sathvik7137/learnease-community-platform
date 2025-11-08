@@ -5,7 +5,7 @@ import '../services/auth_service.dart';
 import 'add_content_screen.dart';
 import 'community_contributions_screen.dart';
 import 'sign_in_screen.dart';
-import '../widgets/theme_toggle_widget.dart';
+import '../widgets/theme_toggle_button.dart';
 
 class MyContributionsScreen extends StatefulWidget {
   const MyContributionsScreen({super.key});
@@ -244,7 +244,7 @@ class _MyContributionsScreenState extends State<MyContributionsScreen> {
                 ),
               ),
             ),
-          const ThemeToggleWidget(),
+          const ThemeToggleButton(size: 24, padding: EdgeInsets.only(right: 16)),
         ],
       ),
       body: _isLoading
@@ -611,6 +611,9 @@ class _MyContributionsScreenState extends State<MyContributionsScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  // Status badge
+                  _buildStatusBadge(content.status),
                   const Spacer(),
                   const Icon(Icons.access_time, size: 16),
                   const SizedBox(width: 4),
@@ -620,9 +623,107 @@ class _MyContributionsScreenState extends State<MyContributionsScreen> {
                   ),
                 ],
               ),
+              // Show rejection reason if content is rejected and has a reason
+              if (content.status == ContentStatus.rejected && content.rejectionReason != null && content.rejectionReason!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.red.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Colors.red.shade700,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Rejection Reason:',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.red.shade700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              content.rejectionReason!,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.red.shade900,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(ContentStatus status) {
+    Color badgeColor;
+    String statusText;
+    IconData statusIcon;
+
+    switch (status) {
+      case ContentStatus.pending:
+        badgeColor = Colors.orange;
+        statusText = 'Pending';
+        statusIcon = Icons.hourglass_bottom;
+        break;
+      case ContentStatus.approved:
+        badgeColor = Colors.green;
+        statusText = 'Approved';
+        statusIcon = Icons.check_circle;
+        break;
+      case ContentStatus.rejected:
+        badgeColor = Colors.red;
+        statusText = 'Rejected';
+        statusIcon = Icons.cancel;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: badgeColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: badgeColor, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(statusIcon, size: 14, color: badgeColor),
+          const SizedBox(width: 4),
+          Text(
+            statusText,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: badgeColor,
+            ),
+          ),
+        ],
       ),
     );
   }

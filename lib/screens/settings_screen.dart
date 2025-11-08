@@ -3,7 +3,7 @@ import '../services/auth_service.dart';
 import '../providers/theme_provider.dart';
 import 'sign_in_screen.dart';
 import 'edit_profile_screen.dart';
-import '../widgets/theme_toggle_widget.dart';
+import '../widgets/theme_toggle_button.dart';
 import 'package:provider/provider.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -195,12 +195,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: Icon(Icons.email),
                   title: Text('Email Support'),
                   subtitle: Text('support@learnease.com'),
-                  onTap: () {},
-                ),
-                ListTile(
-                  leading: Icon(Icons.chat),
-                  title: Text('Live Chat'),
-                  subtitle: Text('Chat with our team'),
                   onTap: () {},
                 ),
                 ListTile(
@@ -531,7 +525,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         title: Text('Settings'),
         elevation: 0,
-        actions: const [ThemeToggleWidget()],
+        actions: const [
+          ThemeToggleButton(size: 24, padding: EdgeInsets.only(right: 16)),
+        ],
       ),
       body: SingleChildScrollView(
         child: Padding(

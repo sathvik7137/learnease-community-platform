@@ -80,8 +80,68 @@ class _AdminModerationScreenState extends State<AdminModerationScreen> {
   }
 
   Future<void> _rejectContribution(String id) async {
+    // Show dialog to get rejection reason
+    final TextEditingController reasonController = TextEditingController();
+    final String? reason = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Rejection Reason'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Please provide a reason for rejecting this contribution:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: reasonController,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  hintText: 'e.g., Content is not accurate, formatting issues, duplicate content...',
+                  labelText: 'Rejection Reason',
+                ),
+                autofocus: true,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final text = reasonController.text.trim();
+                if (text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please provide a rejection reason')),
+                  );
+                  return;
+                }
+                Navigator.of(context).pop(text);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Reject'),
+            ),
+          ],
+        );
+      },
+    );
+
+    // If user cancelled, don't proceed with rejection
+    if (reason == null || reason.isEmpty) {
+      return;
+    }
+
     try {
-      final success = await UserContentService.rejectContribution(id);
+      final success = await UserContentService.rejectContribution(id, rejectionReason: reason);
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Contribution rejected')),

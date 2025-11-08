@@ -4,6 +4,7 @@ import '../models/course.dart';
 import '../services/local_storage.dart';
 import '../utils/app_theme.dart';
 import '../widgets/theme_toggle_button.dart';
+import '../widgets/enhanced_ui_components.dart';
 import 'course_detail_screen.dart';
 import 'sign_in_screen.dart';
 import '../services/auth_service.dart';
@@ -159,7 +160,26 @@ class _CoursesScreenState extends State<CoursesScreen> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
-      child: ScaleOnTap(
+      child: HoverLiftCard(
+        onTap: () async {
+          final token = await AuthService().getToken();
+          if (token == null) {
+            // Ask user to sign in first
+            final res = await Navigator.push<bool?>(
+              context,
+              MaterialPageRoute(builder: (context) => SignInScreen()),
+            );
+            // If user signed in (or returned true), proceed to course
+            final newToken = await AuthService().getToken();
+            if (newToken == null) return;
+          }
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CourseDetailScreen(course: course),
+            ),
+          ).then((_) => _loadCourseProgress()); // Refresh on return
+        },
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
@@ -170,173 +190,122 @@ class _CoursesScreenState extends State<CoursesScreen> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: colors.primary.withOpacity(0.15),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
-              ),
-            ],
           ),
-              child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () async {
-                final token = await AuthService().getToken();
-                if (token == null) {
-                  // Ask user to sign in first
-                  final res = await Navigator.push<bool?>(
-                    context,
-                    MaterialPageRoute(builder: (context) => SignInScreen()),
-                  );
-                  // If user signed in (or returned true), proceed to course
-                  final newToken = await AuthService().getToken();
-                  if (newToken == null) return;
-                }
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => CourseDetailScreen(course: course),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Row(
+              children: [
+                // Course icon with gradient background
+                Container(
+                  width: 65,
+                  height: 65,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        colors.primary,
+                        colors.secondary,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.primary.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                ).then((_) => _loadCourseProgress()); // Refresh on return
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Row(
-                  children: [
-                    // Course icon with gradient background
-                    Container(
-                      width: 65,
-                      height: 65,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            colors.primary,
-                            colors.secondary,
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: colors.primary.withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Text(
-                          course.icon,
-                          style: const TextStyle(
-                            fontSize: 32,
-                          ),
-                        ),
+                  child: Center(
+                    child: Text(
+                      course.icon,
+                      style: const TextStyle(
+                        fontSize: 32,
                       ),
                     ),
-                    const SizedBox(width: 18),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            course.name,
-                            style: TextStyle(
-                              fontSize: 19,
-                              fontWeight: FontWeight.bold,
-                              color: colors.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            course.description,
-                            style: TextStyle(
-                              color: isDark ? Colors.white70 : Colors.grey.shade700,
-                              fontSize: 13,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 12),
-                          // Progress bar with percentage
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Container(
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(4),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: colors.primary.withOpacity(0.2),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: LinearProgressIndicator(
-                                      value: isLoading ? 0.0 : courseProgress[course.id] ?? 0.0,
-                                      backgroundColor: isDark ? Colors.grey[700] : Colors.grey[300],
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        course.id == 'java' ? Colors.orange.shade600 : Colors.blue.shade600,
-                                      ),
-                                      minHeight: 8,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: course.id == 'java' 
-                                      ? Colors.orange.shade50 
-                                      : Colors.blue.shade50,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: course.id == 'java' 
-                                        ? Colors.orange.shade200 
-                                        : Colors.blue.shade200,
-                                  ),
-                                ),
-                                child: Text(
-                                  isLoading
-                                      ? '...'
-                                      : '${((courseProgress[course.id] ?? 0.0) * 100).round()}%',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: course.id == 'java' 
-                                        ? Colors.orange.shade900 
-                                        : Colors.blue.shade900,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: colors.primary.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.arrow_forward_ios,
-                        color: colors.primary,
-                        size: 16,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        course.name,
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.bold,
+                          color: colors.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        course.description,
+                        style: TextStyle(
+                          color: isDark ? Colors.white70 : Colors.grey.shade700,
+                          fontSize: 13,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 12),
+                      // Enhanced glowing progress bar
+                      Row(
+                        children: [
+                          Expanded(
+                            child: GlowingProgressBar(
+                              value: isLoading ? 0.0 : courseProgress[course.id] ?? 0.0,
+                              height: 8,
+                              color: course.id == 'java' ? Colors.orange.shade600 : Colors.blue.shade600,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: course.id == 'java' 
+                                  ? Colors.orange.shade50 
+                                  : Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: course.id == 'java' 
+                                    ? Colors.orange.shade200 
+                                    : Colors.blue.shade200,
+                              ),
+                            ),
+                            child: Text(
+                              isLoading
+                                  ? '...'
+                                  : '${((courseProgress[course.id] ?? 0.0) * 100).round()}%',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: course.id == 'java' 
+                                    ? Colors.orange.shade900 
+                                    : Colors.blue.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_ios,
+                    color: colors.primary,
+                    size: 16,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

@@ -5,7 +5,7 @@ import '../data/fill_blanks_data.dart';
 import '../data/course_content.dart';
 import '../services/local_storage.dart';
 import 'fill_blank_exercise_screen.dart';
-import '../widgets/theme_toggle_widget.dart';
+import '../widgets/theme_toggle_button.dart';
 
 class FillBlanksScreen extends StatefulWidget {
   final Course course;
@@ -74,7 +74,9 @@ class _FillBlanksScreenState extends State<FillBlanksScreen> {
         title: Text('${widget.course.name} - Fill in the Blanks'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
-        actions: const [ThemeToggleWidget()],
+        actions: const [
+          ThemeToggleButton(size: 24, padding: EdgeInsets.only(right: 16)),
+        ],
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())

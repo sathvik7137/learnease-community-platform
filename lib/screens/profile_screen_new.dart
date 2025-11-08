@@ -3,8 +3,10 @@ import '../data/course_content.dart';
 import '../services/local_storage.dart';
 import '../services/user_content_service.dart';
 import '../services/auth_service.dart';
-import '../widgets/theme_toggle_widget.dart';
+import '../widgets/theme_toggle_button.dart';
 import 'admin_login_screen.dart';
+import 'admin_dashboard_screen.dart';
+import '../main.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -48,8 +50,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       username = loadedUsername;
     }
     
-    // Try to get email from auth service (this might not be available depending on your auth implementation)
-    // For now, we'll use a default or you can extend this based on your auth system
+    // Get email from auth service
+    final loadedEmail = await _authService.getUserEmail();
+    if (loadedEmail != null && loadedEmail.isNotEmpty) {
+      email = loadedEmail;
+    }
     
     // Calculate Java progress
     final javaTopicIds = javaTopics.map((topic) => topic.id).toList();
@@ -96,7 +101,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Profile & Progress'),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
-        actions: const [ThemeToggleWidget()],
+        actions: const [
+          ThemeToggleButton(size: 24, padding: EdgeInsets.only(right: 16)),
+        ],
       ),
       body: isLoading 
         ? Center(child: CircularProgressIndicator())
@@ -172,7 +179,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _handleAdminLoginSuccess() {
-  // No-op here; MainNavigation listens for role change.
+    print('[ProfileScreen] 🔐 Admin login successful!');
+    
+    // Close the AdminLogin dialog first
+    Navigator.of(context).pop();
+    
+    // IMMEDIATE FIX: Force MainNavigation to update admin status and rebuild instantly
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (mounted) {
+        print('[ProfileScreen] ⚡ Forcing IMMEDIATE admin dashboard render');
+        
+        // Get the MainNavigation state
+        final mainNavState = MainNavigation.globalKey.currentState;
+        if (mainNavState != null) {
+          print('[ProfileScreen] ✅ Found MainNavigation, forcing admin state update');
+          
+          // Immediately force rebuild with admin status - this will trigger AdminDashboard
+          mainNavState.forceAdminDashboardRender();
+          
+        } else {
+          print('[ProfileScreen] ❌ Could not find MainNavigation state');
+        }
+      }
+    });
   }
 
   Widget _buildProgressSection() {

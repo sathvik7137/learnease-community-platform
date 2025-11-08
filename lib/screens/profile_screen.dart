@@ -673,6 +673,12 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                 _userEmail = 'student@example.com';
                                 _username = 'Student';
                               });
+                              
+                              // Navigate back to home
+                              Navigator.of(context).popUntil((route) => route.isFirst);
+                              
+                              // Trigger admin status refresh in main navigation
+                              MainNavigation.globalKey.currentState?.forceCheckAdminStatusImmediate();
                             }
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
@@ -693,6 +699,24 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         icon: Icon(Icons.logout),
                         label: Text('Logout'),
                       ),
+                    ),
+                    SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        // Debug: Clear all stored tokens to simulate fresh install
+                        await AuthService().clearTokens();
+                        if (mounted) {
+                          MainNavigation.globalKey.currentState?.forceCheckAdminStatusImmediate();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Debug: Token cleared - App will reset to guest mode on restart'),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                        }
+                      },
+                      icon: Icon(Icons.delete_forever),
+                      label: Text('Clear Token (Debug)'),
                     ),
                   ],
                 ),

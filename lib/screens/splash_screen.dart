@@ -139,11 +139,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     // Generate floating particles
     _generateParticles();
     
-    // Start animation sequence with precise timing
+    // Start animation sequence with faster timing for quicker startup
     _backgroundController.forward();
     _particleController.repeat();
     
-    Future.delayed(const Duration(milliseconds: 200), () {
+    Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted) {
         _logoFadeController.forward();
         _logoScaleController.forward();
@@ -151,11 +151,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       }
     });
     
-    Future.delayed(const Duration(milliseconds: 400), () {
+    Future.delayed(const Duration(milliseconds: 200), () {
       if (mounted) _ringController.forward();
     });
     
-    Future.delayed(const Duration(milliseconds: 1400), () {
+    Future.delayed(const Duration(milliseconds: 700), () {
       if (mounted) {
         _ringPulseController.forward().then((_) {
           if (mounted) _ringPulseController.reverse();
@@ -163,20 +163,20 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       }
     });
     
-    Future.delayed(const Duration(milliseconds: 1000), () {
+    Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) _titleController.forward();
     });
     
-    Future.delayed(const Duration(milliseconds: 1400), () {
+    Future.delayed(const Duration(milliseconds: 700), () {
       if (mounted) _subtitleController.forward();
     });
     
-    Future.delayed(const Duration(milliseconds: 1800), () {
+    Future.delayed(const Duration(milliseconds: 900), () {
       if (mounted) _shimmerController.forward();
     });
     
-    // Navigate to main screen after 3000ms
-    Timer(const Duration(milliseconds: 3000), () {
+    // Navigate to main screen after 1500ms (reduced for faster startup)
+    Timer(const Duration(milliseconds: 1500), () {
       if (mounted) {
         final Widget nextPage = MainNavigation(key: MainNavigation.globalKey);
         Navigator.of(context).pushReplacement(

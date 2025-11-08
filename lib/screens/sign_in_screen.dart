@@ -6,6 +6,7 @@ import 'forgot_password_screen.dart';
 import 'sign_up_screen.dart';
 import '../widgets/dynamic_notification.dart';
 import '../widgets/password_input_field.dart';
+import '../widgets/theme_toggle_button.dart';
 
 class SignInScreen extends StatefulWidget {
   final String? initialEmail;
@@ -150,6 +151,9 @@ class _SignInScreenState extends State<SignInScreen> {
               onPressed: _goBackToCredentials,
             )
           : null,
+        actions: const [
+          ThemeToggleButton(size: 24, padding: EdgeInsets.only(right: 16)),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -208,20 +212,54 @@ class _SignInScreenState extends State<SignInScreen> {
                   child: const Text('Forgot password?'),
                 ),
                 
+                // Always visible Register button
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      "Don't have an account?",
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white70
+                            : Colors.black87,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _navigateToSignUp,
+                      child: Text(
+                        'Register',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                
                 // Show signup button when email is not registered
                 if (_showSignUpOption) ...[
                   const SizedBox(height: 8),
                   Card(
-                    color: Colors.blue.shade50,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.blue.shade900.withOpacity(0.3)
+                        : Colors.blue.shade50,
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
                         children: [
-                          const Text(
+                          Text(
                             'Email not registered?',
                             style: TextStyle(
                               fontWeight: FontWeight.w500,
-                              color: Colors.black87,
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.white
+                                  : Colors.black87,
                             ),
                           ),
                           const SizedBox(height: 8),

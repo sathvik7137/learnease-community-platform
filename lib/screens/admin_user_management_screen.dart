@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
+import '../config/api_config.dart';
 
 class UserData {
   final String id;
@@ -41,7 +42,7 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
   bool _isLoading = false;
   String? _errorMessage;
   String _searchQuery = '';
-  static const String _serverUrl = 'http://localhost:8080';
+  static String get _serverUrl => ApiConfig.webBaseUrl;
 
   @override
   void initState() {
@@ -200,31 +201,55 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
 
   Future<void> _deleteUser(String userId) async {
     try {
-      final token = await AuthService().getToken();
-      if (token == null) return;
-
-      final response = await http.delete(
-        Uri.parse('$_serverUrl/api/admin/users/$userId'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+      print('[UserManagement] 🗑️ Deleting user: $userId');
+      final response = await AuthService().authenticatedRequest(
+        'DELETE',
+        '/api/admin/users/$userId',
       ).timeout(const Duration(seconds: 10));
 
+      print('[UserManagement] 📤 Delete response status: ${response.statusCode}');
+
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User deleted successfully')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ User deleted successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
         await _loadUsers();
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        print('[UserManagement] ⚠️ Auth error: ${response.statusCode}');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Not authorized to delete user'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to delete user')),
-        );
+        print('[UserManagement] ❌ Delete failed with status: ${response.statusCode}');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ Failed to delete user (${response.statusCode})'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      print('[UserManagement] ❌ Error deleting user: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -371,10 +396,39 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen> {
                                         ),
                                       ],
                                     ),
-                                    trailing: IconButton(
-                                      icon: const Icon(Icons.arrow_forward_ios),
-                                      onPressed: () =>
-                                          _viewUserDetails(user),
+                                    trailing: PopupMenuButton<String>(
+                                      onSelected: (value) {
+                                        if (value == 'view') {
+                                          _viewUserDetails(user);
+                                        } else if (value == 'delete') {
+                                          _showDeleteConfirmation(user.id);
+                                        }
+                                      },
+                                      itemBuilder: (BuildContext context) => [
+                                        const PopupMenuItem<String>(
+                                          value: 'view',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.info_outline, size: 20),
+                                              SizedBox(width: 8),
+                                              Text('View Details'),
+                                            ],
+                                          ),
+                                        ),
+                                        const PopupMenuItem<String>(
+                                          value: 'delete',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.delete, size: 20, color: Colors.red),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'Delete User',
+                                                style: TextStyle(color: Colors.red),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                     onTap: () => _viewUserDetails(user),
                                   ),

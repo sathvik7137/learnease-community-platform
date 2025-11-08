@@ -2,6 +2,7 @@
   import 'package:http/http.dart' as http;
   import 'package:google_sign_in/google_sign_in.dart';
   import 'package:shared_preferences/shared_preferences.dart';
+import '../config/api_config.dart';
   import '../models/user.dart';
 
   class AuthService {
@@ -40,7 +41,7 @@
     }
     return {'error': 'Failed to send OTP after multiple attempts'};
   }
-    final String _base = "http://localhost:8080";
+    final String _base = ApiConfig.webBaseUrl;
     String? _pendingPassword;
     bool _isRefreshing = false;
     final List<void Function(String?)> _refreshCallbacks = [];
@@ -114,6 +115,40 @@
     Future<void> clearUserRole() async {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('user_role');
+    }
+
+    /// Validate if the stored token is still valid (not expired)
+    /// This calls the server to check if the token is accepted
+    Future<bool> isTokenValid() async {
+      try {
+        final token = await getToken();
+        
+        // No token = not valid
+        if (token == null || token.isEmpty) {
+          print('[AuthService] ❌ No token found, treating as invalid');
+          return false;
+        }
+        
+        // Try to use the token with a simple API call
+        final uri = Uri.parse('$_base/api/stats/public');
+        final response = await http.get(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ).timeout(const Duration(seconds: 5));
+        
+        // If we get 200 or 401 (auth required but token exists), token is structurally valid
+        // 401 means token is expired or invalid
+        // 200 means token is valid
+        final isValid = response.statusCode == 200;
+        print('[AuthService] Token validation: ${isValid ? '✅ VALID' : '❌ INVALID'} (status: ${response.statusCode})');
+        return isValid;
+      } catch (e) {
+        print('[AuthService] ⚠️ Error validating token: $e');
+        return false;
+      }
     }
 
     Future<Map<String, dynamic>> sendResetOtp(String email) async {
@@ -299,20 +334,34 @@
       }
       try {
         final uri = Uri.parse('$_base/api/auth/refresh');
+        final refreshToken = await getRefreshToken();
+        print('[AuthService] 🔄 Refresh token available: ${refreshToken != null}');
+        if (refreshToken == null) {
+          print('[AuthService] ❌ No refresh token available');
+          return {'error': 'No refresh token'};
+        }
+        print('[AuthService] 📤 Sending refresh request to $uri');
         final resp = await http.post(
           uri,
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'refreshToken': refreshToken}),
-        );
+        ).timeout(const Duration(seconds: 10));
+        
+        print('[AuthService] 📥 Refresh response status: ${resp.statusCode}');
+        
         if (resp.statusCode == 200) {
           final data = jsonDecode(resp.body) as Map<String, dynamic>;
+          print('[AuthService] ✅ Refresh successful, new token received');
           if (data.containsKey('accessToken') && data.containsKey('refreshToken')) {
             await saveTokens(data['accessToken'] as String, data['refreshToken'] as String);
             return data;
           }
+          print('[AuthService] ⚠️ Refresh response missing tokens');
         }
+        print('[AuthService] ❌ Refresh failed with status ${resp.statusCode}');
         return {'error': 'Token refresh failed', 'statusCode': resp.statusCode};
       } catch (e) {
+        print('[AuthService] ❌ Refresh error: $e');
         return {'error': 'Token refresh error: $e'};
       }
     }
@@ -325,6 +374,7 @@
     }) async {
       final token = await getToken();
       if (token == null) {
+        print('[AuthService] ❌ No token available');
         return http.Response(jsonEncode({'error': 'Not authenticated'}), 401);
       }
       final uri = Uri.parse('$_base$endpoint');
@@ -333,6 +383,7 @@
         'Authorization': 'Bearer $token',
         ...?additionalHeaders,
       };
+      print('[AuthService] 📥 $method request to $endpoint with token (first 20 chars: ${token.substring(0, 20)}...)');
       http.Response resp;
       switch (method.toUpperCase()) {
         case 'GET':
@@ -344,17 +395,25 @@
         case 'PUT':
           resp = await http.put(uri, headers: headers, body: body != null ? jsonEncode(body) : null);
           break;
+        case 'PATCH':
+          resp = await http.patch(uri, headers: headers, body: body != null ? jsonEncode(body) : null);
+          break;
         case 'DELETE':
           resp = await http.delete(uri, headers: headers);
           break;
         default:
           throw ArgumentError('Unsupported HTTP method: $method');
       }
-      // If 401, try to refresh token and retry
-      if (resp.statusCode == 401) {
+      print('[AuthService] 📤 Response status: ${resp.statusCode}');
+      
+      // If 401 or 403, try to refresh token and retry
+      if (resp.statusCode == 401 || resp.statusCode == 403) {
+        print('[AuthService] 🔄 Got ${resp.statusCode}, attempting token refresh (isRefreshing=$_isRefreshing)');
         if (_isRefreshing) {
+          print('[AuthService] ⏳ Already refreshing, waiting for new token...');
           final newToken = await _waitForTokenRefresh();
           if (newToken != null) {
+            print('[AuthService] ✅ Got new token from refresh, retrying request');
             headers['Authorization'] = 'Bearer $newToken';
             switch (method.toUpperCase()) {
               case 'GET':
@@ -366,17 +425,27 @@
               case 'PUT':
                 resp = await http.put(uri, headers: headers, body: body != null ? jsonEncode(body) : null);
                 break;
+              case 'PATCH':
+                resp = await http.patch(uri, headers: headers, body: body != null ? jsonEncode(body) : null);
+                break;
               case 'DELETE':
                 resp = await http.delete(uri, headers: headers);
                 break;
             }
+            print('[AuthService] 📤 Retry response status: ${resp.statusCode}');
+          } else {
+            print('[AuthService] ❌ Failed to get new token');
           }
         } else {
+          print('[AuthService] 🔐 Initiating token refresh...');
           _isRefreshing = true;
           final refreshResult = await refreshAccessToken();
           _isRefreshing = false;
+          print('[AuthService] 🔐 Refresh result: ${refreshResult.keys}');
+          
           if (refreshResult.containsKey('accessToken')) {
             final newToken = refreshResult['accessToken'] as String;
+            print('[AuthService] ✅ Got new token, notifying ${_refreshCallbacks.length} callbacks');
             for (final callback in _refreshCallbacks) {
               callback(newToken);
             }
@@ -392,11 +461,16 @@
               case 'PUT':
                 resp = await http.put(uri, headers: headers, body: body != null ? jsonEncode(body) : null);
                 break;
+              case 'PATCH':
+                resp = await http.patch(uri, headers: headers, body: body != null ? jsonEncode(body) : null);
+                break;
               case 'DELETE':
                 resp = await http.delete(uri, headers: headers);
                 break;
             }
+            print('[AuthService] 📤 Retry response status: ${resp.statusCode}');
           } else {
+            print('[AuthService] ❌ Token refresh failed: ${refreshResult['error']}');
             await clearTokens();
             _refreshCallbacks.clear();
           }
@@ -518,6 +592,35 @@
         }
       } catch (e) {
         print('[AuthService] ❌ Admin login error: $e');
+        return {'success': false, 'error': 'Network error: $e'};
+      }
+    }
+
+    Future<Map<String, dynamic>> resetAdminPassword(String email, String passkey, String newPassword) async {
+      final uri = Uri.parse('$_base/api/auth/admin-reset-password');
+      try {
+        print('[AuthService] 🔐 Attempting admin password reset for: $email');
+        final resp = await http.post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'email': email,
+            'passkey': passkey,
+            'newPassword': newPassword,
+          }),
+        ).timeout(const Duration(seconds: 15));
+        
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        
+        if (resp.statusCode == 200 && data['success'] == true) {
+          print('[AuthService] ✅ Admin password reset successful');
+          return {'success': true, 'message': data['message'] ?? 'Password reset successfully'};
+        } else {
+          print('[AuthService] ❌ Admin password reset failed: ${data['error']}');
+          return {'success': false, 'error': data['error'] ?? 'Password reset failed'};
+        }
+      } catch (e) {
+        print('[AuthService] ❌ Admin password reset error: $e');
         return {'success': false, 'error': 'Network error: $e'};
       }
     }

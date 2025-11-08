@@ -1,23 +1,68 @@
 import 'package:sqlite3/sqlite3.dart';
 import 'package:bcrypt/bcrypt.dart';
+import 'dart:io';
 
-void main() {
+// Helper to read from environment or .env file
+String? _getEnv(String key) {
+  // First try environment variables
+  final envValue = Platform.environment[key];
+  if (envValue != null && envValue.isNotEmpty) {
+    return envValue;
+  }
+  
+  // Then try .env file
+  try {
+    final envFile = File('.env');
+    if (envFile.existsSync()) {
+      final lines = envFile.readAsLinesSync();
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
+        final idx = trimmed.indexOf('=');
+        if (idx <= 0) continue;
+        final k = trimmed.substring(0, idx).trim();
+        var v = trimmed.substring(idx + 1).trim();
+        if (v.startsWith('"') && v.endsWith('"')) {
+          v = v.substring(1, v.length - 1);
+        }
+        if (k == key) return v;
+      }
+    }
+  } catch (_) {}
+  
+  return null;
+}
+
+void main(List<String> args) {
   print('🔧 Setting up admin user...\n');
 
+  // Read credentials from environment variables or .env file
+  // Usage:
+  //   dart run setup_admin_user.dart [email] [password] [passkey]
+  //   OR set ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_PASSKEY env vars
+  //   OR create .env file with those variables
+
+  final adminEmail = args.isNotEmpty
+      ? args[0].toLowerCase()
+      : (_getEnv('ADMIN_EMAIL')?.toLowerCase() ?? 'admin@learnease.com').toLowerCase();
+  
+  final adminPassword = args.length > 1
+      ? args[1]
+      : (_getEnv('ADMIN_PASSWORD') ?? 'admin@123');
+  
+  final adminPasskey = args.length > 2
+      ? args[2]
+      : (_getEnv('ADMIN_PASSKEY') ?? 'admin_secure_passkey_12345');
+  
   // Connect to the database
   final db = sqlite3.open('users.db');
   
-  const String adminEmail = 'admin@learnease.com';
-  const String adminPassword = 'admin@123';
-  const String adminPasskey = 'admin_secure_passkey_12345'; // Custom passkey
-  
-  // Hash the password and passkey
+  // Hash the password and passkey with BCrypt
   final passwordHash = BCrypt.hashpw(adminPassword, BCrypt.gensalt());
   final passkeyHash = BCrypt.hashpw(adminPasskey, BCrypt.gensalt());
   
+  print('✅ Credentials loaded from: ${args.isNotEmpty ? 'command-line arguments' : 'environment variables / .env file'}');
   print('Admin Email: $adminEmail');
-  print('Admin Password: $adminPassword');
-  print('Admin Passkey: $adminPasskey');
   print('Password Hash: ${passwordHash.substring(0, 30)}...');
   print('Passkey Hash: ${passkeyHash.substring(0, 30)}...\n');
   

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import '../services/auth_service.dart';
-import 'admin_moderation_screen.dart';
+import '../widgets/enhanced_ui_components.dart';
+import '../config/api_config.dart';
 import 'admin_user_management_screen.dart';
 import 'admin_contributions_screen.dart';
+import 'platform_analytics_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -22,9 +25,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
   int _totalContributions = 0;
   int _pendingContributions = 0;
   int _approvedContributions = 0;
+  int _rejectedContributions = 0;
   
   late AnimationController _fadeInController;
   late Animation<double> _fadeInAnimation;
+  
+  // Real-time polling
+  Timer? _pollTimer;
+  Map<String, dynamic>? _previousStats;
+  bool _isPolling = false;
 
   @override
   void initState() {
@@ -41,104 +50,137 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
     );
     
     _loadAdminInfo();
+    _startPolling(); // Start real-time polling
   }
 
   Future<void> _loadAdminInfo() async {
+    // Skip loading if already in the middle of loading (during polling)
+    if (_isLoading && _previousStats != null) {
+      print('[AdminDashboard] ⏭️ Skipping load - already loading');
+      return;
+    }
+
     try {
-      setState(() {
-        _isLoading = true;
-        _hasError = false;
-        _errorMessage = null;
-      });
-
-      final token = await AuthService().getToken();
-      final email = await AuthService().getUserEmail();
-      
-      setState(() => _adminEmail = email);
-
-      // If token exists, try to fetch real stats
-      if (token != null) {
-        try {
-          final response = await http.get(
-            Uri.parse('http://localhost:8080/api/admin/stats'),
-            headers: {'Authorization': 'Bearer $token'},
-          ).timeout(const Duration(seconds: 10));
-
-          if (response.statusCode == 200) {
-            final data = jsonDecode(response.body);
-            setState(() {
-              _totalUsers = data['totalUsers'] ?? 0;
-              _totalContributions = data['totalContributions'] ?? 0;
-              _pendingContributions = data['pendingContributions'] ?? 0;
-              _approvedContributions = data['approvedContributions'] ?? 0;
-              _isLoading = false;
-            });
-            
-            _fadeInController.forward();
-            return; // Success - exit early
-          }
-        } catch (apiError) {
-          print('[AdminDashboard] ⚠️ API call with token failed: $apiError');
-        }
+      // Only set loading state on first load
+      if (_previousStats == null) {
+        setState(() {
+          _isLoading = true;
+          _hasError = false;
+          _errorMessage = null;
+        });
       }
 
-      // Fallback: Load stats from public stats endpoint (without auth)
+      final email = await AuthService().getUserEmail();
+      if (email != null && _adminEmail == null) {
+        setState(() => _adminEmail = email);
+      }
+
+      // Load stats from public stats endpoint (works for both admin and regular users)
       try {
         print('[AdminDashboard] 📊 Loading stats from public endpoint');
         final response = await http.get(
-          Uri.parse('http://localhost:8080/api/stats/public'),
-        ).timeout(const Duration(seconds: 10));
+          Uri.parse('${ApiConfig.webBaseUrl}/api/stats/public'),
+        ).timeout(const Duration(seconds: 5));
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           
-          setState(() {
-            _totalUsers = data['totalUsers'] ?? 0;
-            _totalContributions = data['totalContributions'] ?? 0;
-            _pendingContributions = data['pendingContributions'] ?? 0;
-            _approvedContributions = data['approvedContributions'] ?? 0;
-            _isLoading = false;
-          });
+          final newStats = {
+            'totalUsers': data['totalUsers'] ?? 0,
+            'totalContributions': data['totalContributions'] ?? 0,
+            'pendingContributions': data['pendingContributions'] ?? 0,
+            'approvedContributions': data['approvedContributions'] ?? 0,
+            'rejectedContributions': data['rejectedContributions'] ?? 0,
+          };
           
-          print('[AdminDashboard] ✅ Stats loaded successfully: Users=$_totalUsers, Contributions=$_totalContributions, Pending=$_pendingContributions, Approved=$_approvedContributions');
-          _fadeInController.forward();
+          if (_statsHaveChanged(newStats)) {
+            print('[AdminDashboard] 🔄 Stats changed, updating UI');
+            if (mounted) {
+              setState(() {
+                _totalUsers = newStats['totalUsers']!;
+                _totalContributions = newStats['totalContributions']!;
+                _pendingContributions = newStats['pendingContributions']!;
+                _approvedContributions = newStats['approvedContributions']!;
+                _rejectedContributions = newStats['rejectedContributions']!;
+                _isLoading = false;
+              });
+            }
+            _previousStats = newStats;
+            
+            if (_previousStats == newStats && !_fadeInController.isAnimating) {
+              _fadeInController.forward(from: 0.0);
+            }
+          }
+          
+          print('[AdminDashboard] ✅ Stats: Users=$_totalUsers, Contributions=$_totalContributions, Pending=$_pendingContributions, Approved=$_approvedContributions, Rejected=$_rejectedContributions');
         } else {
-          // Show dashboard with zero stats
+          print('[AdminDashboard] ⚠️ Stats API returned ${response.statusCode}');
+          if (_previousStats == null && mounted) {
+            setState(() {
+              _totalUsers = 0;
+              _totalContributions = 0;
+              _pendingContributions = 0;
+              _approvedContributions = 0;
+              _rejectedContributions = 0;
+              _isLoading = false;
+            });
+            _fadeInController.forward();
+          }
+        }
+      } catch (e) {
+        print('[AdminDashboard] ⚠️ Stats API failed: $e');
+        if (_previousStats == null && mounted) {
           setState(() {
             _totalUsers = 0;
             _totalContributions = 0;
             _pendingContributions = 0;
             _approvedContributions = 0;
+            _rejectedContributions = 0;
             _isLoading = false;
           });
           _fadeInController.forward();
         }
-      } catch (e) {
-        print('[AdminDashboard] ⚠️ Public stats API failed: $e');
-        // Show dashboard with zero stats
-        setState(() {
-          _totalUsers = 0;
-          _totalContributions = 0;
-          _pendingContributions = 0;
-          _approvedContributions = 0;
-          _isLoading = false;
-        });
-        _fadeInController.forward();
       }
     } catch (e) {
-      // Critical error - show error state
       print('[AdminDashboard] ❌ Critical error: $e');
-      setState(() {
-        _hasError = true;
-        _errorMessage = e.toString();
-        _isLoading = false;
-      });
+      if (_previousStats == null && mounted) {
+        setState(() {
+          _hasError = true;
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
     }
+  }
+  
+  bool _statsHaveChanged(Map<String, dynamic> newStats) {
+    if (_previousStats == null) return true;
+    
+    return _previousStats!['totalUsers'] != newStats['totalUsers'] ||
+        _previousStats!['totalContributions'] != newStats['totalContributions'] ||
+        _previousStats!['pendingContributions'] != newStats['pendingContributions'] ||
+        _previousStats!['approvedContributions'] != newStats['approvedContributions'] ||
+        _previousStats!['rejectedContributions'] != newStats['rejectedContributions'];
+  }
+  
+  void _startPolling() {
+    print('[AdminDashboard] 🔄 Starting real-time polling every 5 seconds');
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted && !_isPolling) {
+        _isPolling = true;
+        _loadAdminInfo().then((_) {
+          _isPolling = false;
+        }).catchError((_) {
+          _isPolling = false;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
     _fadeInController.dispose();
+    _pollTimer?.cancel(); // Stop polling when screen is disposed
     super.dispose();
   }
 
@@ -259,26 +301,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Welcome Back',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _adminEmail ?? 'Admin',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
-              ),
-            ],
+          Text(
+            'Welcome Admin',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
           ),
           PopupMenuButton<String>(
             itemBuilder: (context) => [
@@ -347,6 +376,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
         'icon': Icons.check_circle_outline,
         'color': Colors.teal,
       },
+      {
+        'label': 'Rejected',
+        'value': _rejectedContributions,
+        'icon': Icons.cancel_outlined,
+        'color': Colors.red,
+      },
     ];
 
     return Column(
@@ -387,20 +422,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
                       ),
                     ),
                     const SizedBox(height: 4),
-                    TweenAnimationBuilder<int>(
-                      tween: IntTween(begin: 0, end: stat['value'] as int),
+                    AnimatedCounter(
+                      value: stat['value'] as int,
                       duration: const Duration(milliseconds: 1500),
-                      curve: Curves.easeOutQuad,
-                      builder: (context, animatedValue, child) {
-                        return Text(
-                          animatedValue.toString(),
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: color,
-                          ),
-                        );
-                      },
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
                     ),
                   ],
                 ),
@@ -448,12 +477,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
         'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminContributionsScreen())),
       },
       {
-        'title': 'Content\nModeration',
-        'icon': Icons.fact_check_rounded,
-        'color': Colors.purple,
-        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminModerationScreen())),
-      },
-      {
         'title': 'User\nManagement',
         'icon': Icons.supervised_user_circle_rounded,
         'color': Colors.indigo,
@@ -463,8 +486,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
         'title': 'Platform\nAnalytics',
         'icon': Icons.analytics_rounded,
         'color': Colors.cyan,
-        'onTap': () => ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('Analytics coming soon...'), backgroundColor: Colors.blue.shade600),
+        'onTap': () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PlatformAnalyticsScreen()),
         ),
       },
     ];
@@ -592,7 +616,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
           child: _buildSystemInfoItem(
             icon: Icons.email_outlined,
             label: 'Email',
-            value: (_adminEmail == null || _adminEmail!.isEmpty) ? 'Loading...' : _adminEmail!,
+            value: (_adminEmail == null || _adminEmail!.isEmpty) 
+                ? 'Loading...' 
+                : _adminEmail!.contains('@')
+                    ? '${_adminEmail!.split('@')[0]}@xxxxxxx'
+                    : 'admin@xxxxxxx',
             color: Colors.blue,
             isDark: isDark,
           ),

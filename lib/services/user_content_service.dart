@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 import '../models/user_content.dart';
+import '../config/api_config.dart';
 import 'dart:async';
 
 class UserContentService {
@@ -40,11 +41,8 @@ class UserContentService {
   static const String _usernameKey = 'user_name';
   static const String _emailKey = 'user_email';
   
-  // Server URL - change this to your deployed server URL
-  static const String _serverUrl = String.fromEnvironment(
-    'SERVER_URL',
-  defaultValue: 'http://localhost:8080',
-  );
+  // Server URL - automatically switches between localhost and ngrok
+  static String get _serverUrl => ApiConfig.webBaseUrl;
   static const Duration _timeout = Duration(seconds: 10);
   
   // Stream controller for real-time updates
@@ -172,6 +170,21 @@ class UserContentService {
       return matchCategory && matchType && isApproved;
     }).toList();
   }
+
+  // Get all community-visible contributions (approved + pending for users to see their own pending content)
+  static Future<List<UserContent>> getCommunityContributions({
+    CourseCategory? category,
+    ContentType? type,
+  }) async {
+    final allContributions = await getAllContributions();
+    
+    return allContributions.where((c) {
+      final matchCategory = category == null || c.category == category;
+      final matchType = type == null || c.type == type;
+      // Show approved content OR pending content (all statuses visible in community)
+      return matchCategory && matchType;
+    }).toList();
+  }
   
   // Get pending contributions (for admin moderation)
   static Future<List<UserContent>> getPendingContributions({
@@ -190,23 +203,104 @@ class UserContentService {
   
   // Start listening to real-time updates via polling (SSE alternative for web)
   static Timer? _pollingTimer;
+  static bool _isPollingActive = false;
+  static int _errorCount = 0;
+  static const int _maxConsecutiveErrors = 5;
+  
+  // Track previous contributions to debounce stream updates
+  static List<UserContent> _previousContributions = [];
+  
+  // Helper to check if contributions have changed
+  static bool _hasContributionsChanged(List<UserContent> newContributions) {
+    if (newContributions.length != _previousContributions.length) {
+      return true;
+    }
+    
+    for (int i = 0; i < newContributions.length; i++) {
+      final newItem = newContributions[i];
+      final oldItem = _previousContributions[i];
+      
+      // Compare key fields to detect changes
+      if (newItem.id != oldItem.id ||
+          newItem.status != oldItem.status ||
+          newItem.content != oldItem.content ||
+          newItem.category != oldItem.category ||
+          newItem.type != oldItem.type) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
   
   static void startRealtimeUpdates() {
+    // Only start if not already running to prevent duplicate timers
+    if (_isPollingActive) {
+      print('⏭️ Real-time updates already active, skipping duplicate start');
+      return;
+    }
+    
+    _isPollingActive = true;
+    _errorCount = 0;
+    print('✅ Starting real-time updates polling');
+    
     // Poll every 3 seconds for updates
     _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
-      try {
-        final contributions = await getAllContributions();
-        _contributionsStreamController.add(contributions);
-      } catch (e) {
-        print('Polling error: $e');
+    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      // Skip if too many errors occurred
+      if (_errorCount >= _maxConsecutiveErrors) {
+        print('⚠️ Too many polling errors, stopping polling');
+        stopRealtimeUpdates();
+        return;
       }
+      
+      // Use async handler wrapped in try-catch to prevent crashes
+      // Use unawaited to prevent unhandled async errors
+      unawaited(_pollForUpdates());
     });
   }
   
+  static Future<void> _pollForUpdates() async {
+    try {
+      // Double-check stream controller is open before proceeding
+      if (_contributionsStreamController.isClosed) {
+        return;
+      }
+      
+      try {
+        final contributions = await getAllContributions();
+        
+        // Only emit if data has actually changed (debounce)
+        if (_hasContributionsChanged(contributions)) {
+          _previousContributions = contributions;
+          
+          // Triple-check stream is still open before adding
+          if (!_contributionsStreamController.isClosed) {
+            _contributionsStreamController.add(contributions);
+          }
+        }
+        _errorCount = 0; // Reset error count on success
+      } catch (fetchError) {
+        _errorCount++;
+        // Only log occasional errors to avoid spam
+        if (_errorCount <= 3 || _errorCount % 5 == 0) {
+          print('⚠️ Polling fetch error (${_errorCount}): $fetchError');
+        }
+      }
+    } catch (e) {
+      _errorCount++;
+      if (_errorCount <= 3 || _errorCount % 5 == 0) {
+        print('⚠️ Polling outer error (${_errorCount}): $e');
+      }
+    }
+  }
+  
   static void stopRealtimeUpdates() {
+    print('🛑 Stopping real-time updates polling');
     _pollingTimer?.cancel();
     _pollingTimer = null;
+    _isPollingActive = false;
+    _errorCount = 0;
   }
   
   // Add new contribution (to server with local fallback)
@@ -376,12 +470,14 @@ class UserContentService {
   }
   
   // Reject a pending contribution
-  static Future<bool> rejectContribution(String id) async {
+  static Future<bool> rejectContribution(String id, {String? rejectionReason}) async {
     try {
       print('❌ Rejecting contribution: $id');
+      print('📝 Rejection reason: ${rejectionReason ?? "No reason provided"}');
       final response = await AuthService().authenticatedRequest(
         'PUT',
         '/api/contributions/$id/reject',
+        body: rejectionReason != null ? {'rejectionReason': rejectionReason} : null,
       );
       
       if (response.statusCode == 200) {

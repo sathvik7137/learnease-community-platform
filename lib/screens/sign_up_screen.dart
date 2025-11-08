@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/user_content_service.dart';
 import '../widgets/username_setup_dialog.dart';
-import '../widgets/theme_toggle_widget.dart';
+import '../widgets/theme_toggle_button.dart';
 import '../widgets/dynamic_notification.dart';
 import '../widgets/password_input_field.dart';
+import '../main.dart';
 import 'otp_verify_screen.dart';
 import 'sign_in_screen.dart';
 
@@ -121,11 +122,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
     if (verifyResp.containsKey('token') || verifyResp.containsKey('accessToken')) {
       // Save username locally as well
       await UserContentService.setUsername(username);
-      _showNotification('Registration successful!', isSuccess: true);
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => SignInScreen(initialEmail: email)),
-        (route) => false,
-      );
+      _showNotification('Registration successful! Welcome to LearnEase!', isSuccess: true);
+      
+      // Auto-login: Navigate directly to main app instead of sign-in screen
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => MainNavigation(key: MainNavigation.globalKey)),
+            (route) => false,
+          );
+        }
+      });
     } else {
       final err = verifyResp['error'] ?? 'Registration failed. Please check your OTP.';
       _showNotification(err.toString(), isSuccess: false);
@@ -150,7 +157,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
               onPressed: _goBackToCredentials,
             )
           : null,
-        actions: const [ThemeToggleWidget()],
+        actions: const [
+          ThemeToggleButton(size: 24, padding: EdgeInsets.only(right: 16)),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),

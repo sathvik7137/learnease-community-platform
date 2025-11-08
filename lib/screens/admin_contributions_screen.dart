@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../services/auth_service.dart';
 import '../models/user_content.dart';
+import '../config/api_config.dart';
 
 class AdminContributionsScreen extends StatefulWidget {
   const AdminContributionsScreen({super.key});
@@ -13,11 +14,11 @@ class AdminContributionsScreen extends StatefulWidget {
 }
 
 class _AdminContributionsScreenState extends State<AdminContributionsScreen> with TickerProviderStateMixin {
-  static const String _serverUrl = 'http://localhost:8080';
+  static String get _serverUrl => ApiConfig.webBaseUrl;
   
   bool _isLoading = true;
   List<Map<String, dynamic>> _contributions = [];
-  String _filterStatus = 'all'; // all, pending, approved, rejected
+  String _filterStatus = 'pending'; // pending, approved, rejected (default: pending)
   String _filterCategory = 'all'; // all, java, dbms
   String _filterType = 'all'; // all, topic, quiz, fillBlank, codeExample
   
@@ -37,7 +38,8 @@ class _AdminContributionsScreenState extends State<AdminContributionsScreen> wit
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
     );
-    _loadContributions();
+    // Wait a moment for token to be fully initialized before loading
+    Future.delayed(const Duration(milliseconds: 500), _loadContributions);
   }
 
   @override
@@ -52,19 +54,18 @@ class _AdminContributionsScreenState extends State<AdminContributionsScreen> wit
     });
 
     try {
-      final token = await AuthService().getToken();
-      if (token == null) throw Exception('No token found');
-
-      final uri = Uri.parse('$_serverUrl/api/admin/contributions').replace(queryParameters: {
-        'status': _filterStatus,
-        'category': _filterCategory,
-        'type': _filterType,
-      });
-
-      final response = await http.get(
-        uri,
-        headers: {'Authorization': 'Bearer $token'},
+      // Build endpoint with query parameters
+      final endpoint = '/api/admin/contributions?status=$_filterStatus&category=$_filterCategory&type=$_filterType';
+      
+      print('[AdminContributions] 📥 Loading from: $endpoint');
+      
+      // Use authenticatedRequest which handles token refresh on 401/403
+      final response = await AuthService().authenticatedRequest(
+        'GET',
+        endpoint,
       ).timeout(const Duration(seconds: 15));
+
+      print('[AdminContributions] 📊 Response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -72,11 +73,35 @@ class _AdminContributionsScreenState extends State<AdminContributionsScreen> wit
           _contributions = data.cast<Map<String, dynamic>>();
           _isLoading = false;
         });
+        print('[AdminContributions] ✅ Loaded ${_contributions.length} contributions');
         _fadeController.forward(from: 0.0);
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        print('[AdminContributions] ⚠️ Auth error: ${response.statusCode}. Attempting refresh...');
+        // Try once more after a small delay
+        await Future.delayed(const Duration(milliseconds: 500));
+        final retryResponse = await AuthService().authenticatedRequest(
+          'GET',
+          endpoint,
+        ).timeout(const Duration(seconds: 15));
+        
+        print('[AdminContributions] 🔄 Retry response status: ${retryResponse.statusCode}');
+        
+        if (retryResponse.statusCode == 200) {
+          final List<dynamic> data = jsonDecode(retryResponse.body);
+          setState(() {
+            _contributions = data.cast<Map<String, dynamic>>();
+            _isLoading = false;
+          });
+          print('[AdminContributions] ✅ Retry successful, loaded ${_contributions.length} contributions');
+          _fadeController.forward(from: 0.0);
+        } else {
+          throw Exception('Failed to load: ${retryResponse.statusCode}');
+        }
       } else {
         throw Exception('Failed to load: ${response.statusCode}');
       }
     } catch (e) {
+      print('[AdminContributions] ❌ Error: $e');
       setState(() {
         _isLoading = false;
       });
@@ -92,20 +117,89 @@ class _AdminContributionsScreenState extends State<AdminContributionsScreen> wit
   }
 
   Future<void> _updateContributionStatus(String id, String status, {String? note}) async {
-    try {
-      final token = await AuthService().getToken();
-      if (token == null) throw Exception('No token found');
-
-      final response = await http.patch(
-        Uri.parse('$_serverUrl/api/admin/contributions/$id/status'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
+    // If rejecting, show dialog to get rejection reason
+    String? rejectionReason;
+    if (status == 'rejected') {
+      final TextEditingController reasonController = TextEditingController();
+      rejectionReason = await showDialog<String>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Rejection Reason'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Please provide a reason for rejecting this contribution:',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: reasonController,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'e.g., Content is not accurate, formatting issues, duplicate content...',
+                    labelText: 'Rejection Reason',
+                  ),
+                  autofocus: true,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(null),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final text = reasonController.text.trim();
+                  if (text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please provide a rejection reason')),
+                    );
+                    return;
+                  }
+                  Navigator.of(context).pop(text);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Reject'),
+              ),
+            ],
+          );
         },
-        body: jsonEncode({
+      );
+
+      // If user cancelled, don't proceed with rejection
+      if (rejectionReason == null || rejectionReason.isEmpty) {
+        return;
+      }
+    }
+
+    try {
+      // Use different endpoint for rejection
+      final String endpoint;
+      final Map<String, dynamic> body;
+      
+      if (status == 'rejected') {
+        endpoint = '/api/contributions/$id/reject';
+        body = {'rejectionReason': rejectionReason!};
+      } else {
+        endpoint = '/api/admin/contributions/$id/status';
+        body = {
           'status': status,
           if (note != null) 'adminNote': note,
-        }),
+        };
+      }
+
+      final response = await AuthService().authenticatedRequest(
+        status == 'rejected' ? 'PUT' : 'PATCH',
+        endpoint,
+        body: body,
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -135,12 +229,9 @@ class _AdminContributionsScreenState extends State<AdminContributionsScreen> wit
 
   Future<void> _deleteContribution(String id) async {
     try {
-      final token = await AuthService().getToken();
-      if (token == null) throw Exception('No token found');
-
-      final response = await http.delete(
-        Uri.parse('$_serverUrl/api/admin/contributions/$id'),
-        headers: {'Authorization': 'Bearer $token'},
+      final response = await AuthService().authenticatedRequest(
+        'DELETE',
+        '/api/admin/contributions/$id',
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -172,16 +263,10 @@ class _AdminContributionsScreenState extends State<AdminContributionsScreen> wit
     if (_selectedIds.isEmpty) return;
 
     try {
-      final token = await AuthService().getToken();
-      if (token == null) throw Exception('No token found');
-
-      final response = await http.post(
-        Uri.parse('$_serverUrl/api/admin/contributions/bulk-approve'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'ids': _selectedIds.toList()}),
+      final response = await AuthService().authenticatedRequest(
+        'POST',
+        '/api/admin/contributions/bulk-approve',
+        body: {'ids': _selectedIds.toList()},
       ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
@@ -229,16 +314,10 @@ class _AdminContributionsScreenState extends State<AdminContributionsScreen> wit
     if (confirmed != true) return;
 
     try {
-      final token = await AuthService().getToken();
-      if (token == null) throw Exception('No token found');
-
-      final response = await http.post(
-        Uri.parse('$_serverUrl/api/admin/contributions/bulk-delete'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'ids': _selectedIds.toList()}),
+      final response = await AuthService().authenticatedRequest(
+        'POST',
+        '/api/admin/contributions/bulk-delete',
+        body: {'ids': _selectedIds.toList()},
       ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
@@ -623,7 +702,11 @@ class _AdminContributionsScreenState extends State<AdminContributionsScreen> wit
         itemCount: _contributions.length,
         itemBuilder: (context, index) {
           final contribution = _contributions[index];
-          final id = contribution['_id']['\$oid'] as String;
+          // Handle both string and object ID formats from MongoDB
+          final idValue = contribution['_id'];
+          final id = idValue is String 
+              ? idValue 
+              : (idValue is Map ? idValue['\$oid'] as String : idValue.toString());
           final isSelected = _selectedIds.contains(id);
 
           return _buildContributionCard(contribution, id, isSelected);
@@ -801,6 +884,15 @@ class _AdminContributionsScreenState extends State<AdminContributionsScreen> wit
               Row(
                 children: [
                   if (status == 'pending') ...[
+                    Expanded(
+                      child: _buildActionButton(
+                        'View',
+                        Icons.visibility,
+                        const Color(0xFF3B82F6),
+                        () => _showContributionDetails(contribution),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: _buildActionButton(
                         'Approve',
@@ -995,26 +1087,8 @@ class _AdminContributionsScreenState extends State<AdminContributionsScreen> wit
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0D1117),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: const Color(0xFF374151),
-                                width: 1,
-                              ),
-                            ),
-                            child: Text(
-                              const JsonEncoder.withIndent('  ').convert(contribution['content']),
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.9),
-                                fontSize: 12,
-                                fontFamily: 'monospace',
-                              ),
-                            ),
-                          ),
+                          const SizedBox(height: 12),
+                          _buildFormattedContent(contribution),
                         ],
                       ),
                     ),
@@ -1025,6 +1099,385 @@ class _AdminContributionsScreenState extends State<AdminContributionsScreen> wit
           ),
         );
       },
+    );
+  }
+
+  Widget _buildFormattedContent(Map<String, dynamic> contribution) {
+    final contentType = contribution['type'] as String? ?? 'topic';
+    final content = contribution['content'] as Map<String, dynamic>? ?? {};
+
+    switch (contentType) {
+      case 'topic':
+        return _buildTopicContent(content);
+      case 'quiz':
+        return _buildQuizContent(content);
+      case 'fillBlank':
+        return _buildFillBlankContent(content);
+      case 'codeExample':
+        return _buildCodeExampleContent(content);
+      default:
+        return _buildRawJsonContent(content);
+    }
+  }
+
+  Widget _buildTopicContent(Map<String, dynamic> content) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1117),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF374151), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            content['title'] as String? ?? 'Untitled',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Explanation:',
+            style: TextStyle(
+              color: const Color(0xFF60A5FA),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            content['explanation'] as String? ?? 'No explanation provided',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.9),
+              fontSize: 14,
+              height: 1.5,
+            ),
+          ),
+          if (content['codeSnippet'] != null && (content['codeSnippet'] as String).isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Code Example:',
+              style: TextStyle(
+                color: const Color(0xFF60A5FA),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                content['codeSnippet'] as String,
+                style: const TextStyle(
+                  color: Color(0xFF10B981),
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+          ],
+          if (content['revisionPoints'] != null) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Key Points:',
+              style: TextStyle(
+                color: const Color(0xFF60A5FA),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...(content['revisionPoints'] as List).map((point) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('• ', style: TextStyle(color: Colors.white.withOpacity(0.9))),
+                  Expanded(
+                    child: Text(
+                      point.toString(),
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuizContent(Map<String, dynamic> content) {
+    final questions = content['questions'] as List? ?? [];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1117),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF374151), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Topic: ${content['topicTitle'] ?? 'Quiz'}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${questions.length} Questions',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.6),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...questions.asMap().entries.map((entry) {
+            final index = entry.key;
+            final question = entry.value as Map<String, dynamic>;
+            final options = question['options'] as List? ?? [];
+            final correctIndex = question['correctIndex'] as int? ?? 0;
+            
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF374151)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Q${index + 1}. ${question['question'] ?? ''}',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...options.asMap().entries.map((optEntry) {
+                    final optIndex = optEntry.key;
+                    final option = optEntry.value;
+                    final isCorrect = optIndex == correctIndex;
+                    
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isCorrect ? Icons.check_circle : Icons.radio_button_unchecked,
+                            size: 16,
+                            color: isCorrect ? const Color(0xFF10B981) : Colors.white.withOpacity(0.5),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              option.toString(),
+                              style: TextStyle(
+                                color: isCorrect ? const Color(0xFF10B981) : Colors.white.withOpacity(0.9),
+                                fontSize: 13,
+                                fontWeight: isCorrect ? FontWeight.w600 : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFillBlankContent(Map<String, dynamic> content) {
+    final questions = content['questions'] as List? ?? [];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1117),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF374151), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Topic: ${content['topicTitle'] ?? 'Fill in the Blanks'}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${questions.length} Questions',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.6),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...questions.asMap().entries.map((entry) {
+            final index = entry.key;
+            final question = entry.value as Map<String, dynamic>;
+            
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF374151)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Q${index + 1}. ${question['statement'] ?? ''}',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        'Answer: ',
+                        style: TextStyle(
+                          color: const Color(0xFF60A5FA),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        question['answer'] ?? '',
+                        style: const TextStyle(
+                          color: Color(0xFF10B981),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (question['hint'] != null && (question['hint'] as String).isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Hint: ${question['hint']}',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.6),
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCodeExampleContent(Map<String, dynamic> content) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1117),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF374151), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            content['title'] as String? ?? 'Code Example',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Language: ${content['language'] ?? 'Unknown'}',
+            style: TextStyle(
+              color: const Color(0xFF60A5FA),
+              fontSize: 12,
+            ),
+          ),
+          if (content['description'] != null && (content['description'] as String).isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              content['description'] as String,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 14,
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              content['code'] as String? ?? '',
+              style: const TextStyle(
+                color: Color(0xFF10B981),
+                fontSize: 12,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRawJsonContent(Map<String, dynamic> content) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1117),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF374151), width: 1),
+      ),
+      child: Text(
+        const JsonEncoder.withIndent('  ').convert(content),
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.9),
+          fontSize: 12,
+          fontFamily: 'monospace',
+        ),
+      ),
     );
   }
 

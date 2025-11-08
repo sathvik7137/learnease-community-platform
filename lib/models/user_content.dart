@@ -26,6 +26,7 @@ class UserContent {
   final DateTime createdAt;
   final DateTime updatedAt;
   final Map<String, dynamic> content; // Flexible content structure
+  final String? rejectionReason; // Reason provided by admin when rejecting
   
   UserContent({
     required this.id,
@@ -37,6 +38,7 @@ class UserContent {
     required this.createdAt,
     required this.updatedAt,
     required this.content,
+    this.rejectionReason,
   });
   
   // Convert to JSON for storage
@@ -51,6 +53,7 @@ class UserContent {
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'content': content,
+      if (rejectionReason != null) 'rejectionReason': rejectionReason,
     };
   }
   
@@ -79,6 +82,7 @@ class UserContent {
       createdAt: DateTime.parse(json['createdAt'] as String? ?? json['serverCreatedAt'] as String? ?? DateTime.now().toIso8601String()),
       updatedAt: DateTime.parse(json['updatedAt'] as String? ?? json['serverCreatedAt'] as String? ?? DateTime.now().toIso8601String()),
       content: Map<String, dynamic>.from(json['content'] as Map? ?? json),
+      rejectionReason: json['rejectionReason'] as String?,
     );
   }
   
@@ -89,6 +93,7 @@ class UserContent {
     Map<String, dynamic>? content,
     CourseCategory? category,
     ContentStatus? status,
+    String? rejectionReason,
   }) {
     return UserContent(
       id: id,
@@ -100,6 +105,7 @@ class UserContent {
       createdAt: createdAt,
       updatedAt: DateTime.now(),
       content: content ?? this.content,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
     );
   }
 }

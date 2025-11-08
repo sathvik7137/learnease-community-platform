@@ -18,6 +18,8 @@ class CourseDetailScreen extends StatefulWidget {
 class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProviderStateMixin {
   Map<String, int> topicScores = {};
   bool isLoading = true;
+  bool _isAdmin = false;
+  bool _adminModeEnabled = false;
   late AnimationController _animationController;
   final List<Animation<double>> _itemAnimations = [];
 
@@ -30,6 +32,15 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> with TickerProv
     );
     // Ensure user is authenticated before loading course progress
     _ensureAuthAndLoad();
+    _checkAdminStatus();
+  }
+
+  Future<void> _checkAdminStatus() async {
+    final email = await AuthService().getUserEmail();
+    final role = await AuthService().getUserRole();
+    setState(() {
+      _isAdmin = role == 'admin' || email?.toLowerCase() == 'admin@learnease.com';
+    });
   }
 
   Future<void> _ensureAuthAndLoad() async {

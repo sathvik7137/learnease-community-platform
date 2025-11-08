@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
-import 'screens/chat_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/courses_screen.dart';
 import 'screens/quiz_test_screen.dart';
@@ -18,15 +17,16 @@ import 'services/auth_service.dart';
 import 'models/user.dart';
 
 Future<void> main() async {
-  // Load environment variables (AI_API_BASE, AI_API_KEY) if present
+  // Initialize Flutter binding
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await dotenv.load(fileName: '.env');
-  } catch (e) {
-    // On web, .env may not be present in assets — log and continue so UI can run.
-    // AI functionality will be disabled until env is provided.
+  
+  // Load environment variables asynchronously without blocking startup
+  dotenv.load(fileName: '.env').catchError((e) {
     debugPrint('Could not load .env: $e');
-  }
+    return null;
+  });
+  
+  // Start app immediately without waiting for .env
   runApp(
     ChangeNotifierProvider(
       create: (context) => ThemeProvider(),
@@ -48,9 +48,6 @@ class LearnEaseApp extends StatelessWidget {
           darkTheme: AppTheme.darkTheme,
           themeMode: themeProvider.themeMode,
           home: const SplashScreen(),
-          routes: {
-            '/chat': (ctx) => const ChatScreen(),
-          },
           debugShowCheckedModeBanner: false,
         );
       },
@@ -72,13 +69,24 @@ class _MainNavigationState extends State<MainNavigation> with WidgetsBindingObse
   bool _isAdmin = false;
   bool _isInitialized = false;
   
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    CoursesScreen(),
-    const CommunityContributionsScreen(),
-    QuizTestScreen(),
-    ProfileScreen(),
-  ];
+  // Method to get screen widget based on index
+  // This ensures ProfileScreen is recreated each time it's displayed
+  Widget _getScreen(int index) {
+    switch (index) {
+      case 0:
+        return const HomeScreen();
+      case 1:
+        return CoursesScreen();
+      case 2:
+        return const CommunityContributionsScreen();
+      case 3:
+        return QuizTestScreen();
+      case 4:
+        return ProfileScreen(key: ValueKey(DateTime.now().millisecondsSinceEpoch)); // Force rebuild with unique key
+      default:
+        return const HomeScreen();
+    }
+  }
 
   @override
   void initState() {
@@ -99,13 +107,8 @@ class _MainNavigationState extends State<MainNavigation> with WidgetsBindingObse
   @override
   void didUpdateWidget(MainNavigation oldWidget) {
     super.didUpdateWidget(oldWidget);
-    print('[MainNav] Widget updated, checking admin status');
-    // After widget update, schedule a check for next frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _forceCheckAdminStatus();
-      }
-    });
+    print('[MainNav] Widget updated, skipping admin status check to avoid loops');
+    // Don't call _forceCheckAdminStatus() here - it causes infinite loops
   }
 
   @override
@@ -116,41 +119,59 @@ class _MainNavigationState extends State<MainNavigation> with WidgetsBindingObse
 
   Future<void> _checkAdminStatus() async {
     try {
-      // Force a fresh check - wait longer for JWT token to be properly saved to storage
-      // This is critical because SharedPreferences might take time to write to disk
-      print('[MainNav] ⏳ Checking admin status with 1000ms delay...');
-      await Future.delayed(const Duration(milliseconds: 1000));
+      print('[MainNav] ⏳ Checking admin status...');
       
+      // First validate if token is actually valid (not expired)
+      final isTokenValid = await AuthService().isTokenValid();
+      print('[MainNav] Token valid: $isTokenValid');
+      
+      // If token is not valid, clear it and treat as non-admin
+      if (!isTokenValid) {
+        print('[MainNav] ⚠️ Token is invalid or expired, clearing cache and treating as non-admin');
+        await AuthService().clearTokens();
+        
+        if (mounted && !_isInitialized) {
+          setState(() {
+            _isAdmin = false;
+            _isInitialized = true;
+            _selectedIndex = 0; // Go to home screen
+          });
+        }
+        return;
+      }
+      
+      // Token is valid, now check the role
       final role = await AuthService().getUserRole();
       print('[MainNav] Current role: $role');
       
       final isAdmin = role == UserRole.admin;
-      print('[MainNav] Is admin: $isAdmin, Previous: $_isAdmin');
+      print('[MainNav] Is admin: $isAdmin');
       
-      if ((_isAdmin != isAdmin || !_isInitialized) && mounted) {
-        print('[MainNav] ✅ Admin status changed! Setting _isAdmin = $isAdmin');
+      if (mounted && !_isInitialized) {
+        print('[MainNav] ✅ First time initialization with valid token');
         setState(() {
           _isAdmin = isAdmin;
           _isInitialized = true;
           
-          // If newly admin, navigate to dashboard
+          // Navigate based on role
           if (isAdmin) {
             _selectedIndex = 4;
-            print('[MainNav] 🎯 Navigated to admin dashboard (index=4)');
+            print('[MainNav] 🎯 Admin user, navigated to dashboard (index=4)');
+          } else {
+            _selectedIndex = 0;
+            print('[MainNav] 📱 Regular user, staying on home (index=0)');
           }
-        });
-      } else if (_isInitialized && mounted) {
-        // Already initialized, just ensure state is updated
-        print('[MainNav] Already initialized');
-        setState(() {
-          // Trigger rebuild to refresh UI
         });
       }
     } catch (e) {
       print('[MainNav] ❌ Error checking admin status: $e');
-      if (mounted) {
+      if (mounted && !_isInitialized) {
+        // On error, treat as not authenticated
+        await AuthService().clearTokens();
         setState(() {
           _isInitialized = true;
+          _isAdmin = false;
+          _selectedIndex = 0;
         });
       }
     }
@@ -162,42 +183,60 @@ class _MainNavigationState extends State<MainNavigation> with WidgetsBindingObse
       // Brief delay to ensure persistence
       await Future.delayed(const Duration(milliseconds: 200));
       
-      final role = await AuthService().getUserRole();
-      final token = await AuthService().getToken();
-      print('[MainNav] Force check - Current role: $role, HasToken: ${token != null}');
+      // Validate token first
+      final isTokenValid = await AuthService().isTokenValid();
+      print('[MainNav] Force check - Token valid: $isTokenValid');
       
-      final isAdmin = role == UserRole.admin;
-      print('[MainNav] Force check - Is admin: $isAdmin, Previous: $_isAdmin');
-      
-      if (mounted) {
-        // Update state with new values
-        setState(() {
-          _isAdmin = isAdmin;
-          _isInitialized = true;
-          
-          if (isAdmin) {
-            _selectedIndex = 4;
-            print('[MainNav] 🚀 Force check - Navigated to admin dashboard (index=4)');
-          } else {
-            _selectedIndex = 0;
-            print('[MainNav] Force check - Not admin, navigated to home (index=0)');
-          }
-        });
+      // If token is invalid, clear everything
+      if (!isTokenValid) {
+        print('[MainNav] Force check - ⚠️ Token invalid, clearing cache');
+        await AuthService().clearTokens();
         
-        // Force another rebuild to ensure UI updates
-        await Future.delayed(const Duration(milliseconds: 100));
         if (mounted) {
           setState(() {
-            // Trigger rebuild
+            _isAdmin = false;
+            _isInitialized = true;
+            _selectedIndex = 0;
           });
-          print('[MainNav] ✅ Force check complete and rebuilt');
+        }
+        return;
+      }
+      
+      final roleString = await AuthService().getUserRole();
+      print('[MainNav] Force check - Role: $roleString');
+      
+      final isAdmin = roleString == UserRole.admin;
+      print('[MainNav] Force check - Is admin: $isAdmin');
+      print('[MainNav] Force check - Current _isAdmin: $_isAdmin, isAdmin: $isAdmin, _isInitialized: $_isInitialized');
+      
+      // ALWAYS update state if role changed, regardless of initialization
+      if (mounted) {
+        if (_isAdmin != isAdmin) {
+          print('[MainNav] 🔄 FORCE CHECK - Admin status CHANGED: $_isAdmin → $isAdmin');
+          setState(() {
+            _isAdmin = isAdmin;
+            _isInitialized = true;
+            
+            if (_isAdmin) {
+              _selectedIndex = 4;
+              print('[MainNav] 🚀 Force check - Admin confirmed, setting index to 4 (dashboard)');
+            } else {
+              _selectedIndex = 0;
+              print('[MainNav] Force check - Not admin, setting index to 0');
+            }
+          });
+        } else {
+          print('[MainNav] Force check - No change needed, already _isAdmin=$_isAdmin');
         }
       }
     } catch (e) {
       print('[MainNav] Force check error: $e');
-      if (mounted) {
+      if (mounted && !_isInitialized) {
+        await AuthService().clearTokens();
         setState(() {
           _isInitialized = true;
+          _isAdmin = false;
+          _selectedIndex = 0;
         });
       }
     }
@@ -209,19 +248,84 @@ class _MainNavigationState extends State<MainNavigation> with WidgetsBindingObse
     _forceCheckAdminStatus();
   }
 
+  /// Public method to switch tabs - called from ProfileScreen after admin login to force re-render
+  void switchToTab(int index) {
+    print('[MainNav] 🔄 PUBLIC METHOD: Switching to tab $index');
+    _onItemTapped(index);
+  }
+
+  /// Force immediate admin dashboard render after successful admin login
+  void forceAdminDashboardRender() async {
+    print('[MainNav] ⚡ FORCE ADMIN DASHBOARD RENDER - Immediate update');
+    
+    try {
+      // Get role immediately (already saved by admin login)
+      final role = await AuthService().getUserRole();
+      print('[MainNav] Force render - Role: $role');
+      
+      final isAdmin = role == UserRole.admin;
+      print('[MainNav] Force render - isAdmin: $isAdmin');
+      
+      if (mounted && isAdmin) {
+        print('[MainNav] 🚀 Setting _isAdmin=true and rebuilding NOW');
+        setState(() {
+          _isAdmin = true;
+          _isInitialized = true;
+          _selectedIndex = 4; // Ensure we're on profile tab
+        });
+        print('[MainNav] ✅ State updated, AdminDashboard should render now');
+      }
+    } catch (e) {
+      print('[MainNav] ❌ Force render error: $e');
+    }
+  }
+
+  /// Verify and update admin status when navigating to profile tab
+  /// This ensures admin users see the dashboard instead of regular profile
+  Future<void> _verifyAdminStatus() async {
+    try {
+      final token = await AuthService().getToken();
+      final role = await AuthService().getUserRole();
+      final email = await AuthService().getUserEmail();
+      
+      print('[MainNav] 🔍 Profile tab verification:');
+      print('[MainNav]   Token exists: ${token != null && token.isNotEmpty}');
+      print('[MainNav]   Email: $email');
+      print('[MainNav]   Role: $role');
+      print('[MainNav]   Current _isAdmin: $_isAdmin');
+      
+      final isAdmin = role == UserRole.admin;
+      print('[MainNav]   Calculated isAdmin: $isAdmin');
+      
+      // Always update admin status when on profile tab to ensure correct view
+      if (mounted) {
+        if (_isAdmin != isAdmin) {
+          print('[MainNav] 🔄 Admin status changed: $_isAdmin → $isAdmin');
+        }
+        setState(() {
+          _isAdmin = isAdmin;
+          _isInitialized = true;
+        });
+        print('[MainNav] ✅ Admin status updated to: $_isAdmin');
+      }
+    } catch (e) {
+      print('[MainNav] ❌ Verify admin status error: $e');
+    }
+  }
+
   void _onItemTapped(int index) {
     // Play sound and haptic feedback
     SoundService.selectionHaptic();
     SoundService.playTapSound();
     
-    // If clicking on profile and user is admin, ensure we show admin dashboard
-    if (index == 4) {
-      _checkAdminStatus();
-    }
-    
     setState(() {
       _selectedIndex = index;
     });
+    
+    // If clicking on profile (index 4), verify admin status and update if needed
+    if (index == 4) {
+      _verifyAdminStatus();
+    }
   }
 
   @override
@@ -333,16 +437,16 @@ class _MainNavigationState extends State<MainNavigation> with WidgetsBindingObse
           } else if (_isAdmin && _selectedIndex != 4) {
             // If admin but on a different tab, show that screen
             print('[MainNav] 📱 Admin on different tab - Showing screen[$_selectedIndex]');
-            return _screens[_selectedIndex];
+            return _getScreen(_selectedIndex);
           } else {
             // Not admin, show regular screens
             print('[MainNav] 📱 Showing screen[$_selectedIndex]');
             // Safety check: if selectedIndex is out of bounds, show home
-            if (_selectedIndex >= 0 && _selectedIndex < _screens.length) {
-              return _screens[_selectedIndex];
+            if (_selectedIndex >= 0 && _selectedIndex < 5) {
+              return _getScreen(_selectedIndex);
             } else {
               print('[MainNav] ⚠️ Index out of bounds, showing home screen');
-              return _screens[0]; // Home screen
+              return _getScreen(0); // Home screen
             }
           }
         },
@@ -410,18 +514,6 @@ class _MainNavigationState extends State<MainNavigation> with WidgetsBindingObse
           ),
         ),
       ),
-      floatingActionButton: Container(
-        margin: const EdgeInsets.only(bottom: 90.0, right: 20.0),
-        child: FloatingActionButton.small(
-          onPressed: () {
-            Navigator.of(context).pushNamed('/chat');
-          },
-          foregroundColor: Colors.white,
-          tooltip: 'Chat & Community',
-          child: const Icon(Icons.chat_bubble_outline),
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 

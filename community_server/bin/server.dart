@@ -18,6 +18,8 @@ import 'package:mongo_dart/mongo_dart.dart';
 // MongoDB connection for contributions
 Db? mongoDb;
 DbCollection? contribCollection;
+DbCollection? quizResultsCollection;
+DbCollection? challengeResultsCollection;
 // Simple local env reader (can be used during startup)
 String? _readLocalEnvTop(String key, {String? path}) {
   try {
@@ -180,11 +182,16 @@ String? _verifyJWT(String token) {
 // Helper to check if a token is from an admin user
 bool _isAdminToken(String token) {
   try {
+    print('🔐 [ADMIN_CHECK] Verifying admin token, JWT secret length: ${jwtSecret.length}');
     final jwt = JWT.verify(token, SecretKey(jwtSecret));
     final role = jwt.payload['role'] as String?;
-    return role == 'admin';
+    final email = jwt.payload['email'] as String?;
+    print('🔐 [ADMIN_CHECK] Token payload - role: $role, email: $email');
+    final isAdmin = role == 'admin';
+    print('🔐 [ADMIN_CHECK] Is admin: $isAdmin (role was "$role")');
+    return isAdmin;
   } catch (e) {
-    print('❌ Admin check failed: $e');
+    print('❌ [ADMIN_CHECK] Admin check failed: $e');
     return false;
   }
 }
@@ -565,7 +572,10 @@ void main(List<String> args) async {
     mongoDb = Db(mongoUri);
     await mongoDb!.open().timeout(const Duration(seconds: 10));
     contribCollection = mongoDb?.collection('contributions');
+    quizResultsCollection = mongoDb?.collection('quiz_results');
+    challengeResultsCollection = mongoDb?.collection('challenge_results');
     print('✅ MongoDB connected successfully');
+    print('✅ Collections initialized: contributions, quiz_results, challenge_results');
   } catch (e) {
     print('⚠️ MongoDB connection failed: $e');
     print('⚠️ Contributions feature will be unavailable. Attempting to use local cache...');
@@ -574,14 +584,14 @@ void main(List<String> args) async {
     contribCollection = null;
   }
 
-  // Real-time contributions stream (Server-Sent Events)
+  // Real-time contributions stream (Server-Sent Events) - only approved
   router.get('/api/contributions/stream', (Request request) async {
     final category = request.url.queryParameters['category'] ?? 'java';
     final controller = StreamController<String>();
     Timer? timer;
     timer = Timer.periodic(const Duration(seconds: 2), (timer) async {
       if (contribCollection != null) {
-        final filtered = await contribCollection?.find({'category': category}).toList() ?? [];
+        final filtered = await contribCollection?.find({'category': category, 'status': 'approved'}).toList() ?? [];
         controller.add('data: ${jsonEncode(filtered)}\n\n');
       } else {
         controller.add('data: []\n\n');
@@ -767,9 +777,14 @@ void main(List<String> args) async {
       }
       print('✅ [LOGIN] Password verified for $email');
       
-      final tokens = _issueTokens(user['id'] as String, email);
-      print('✅ [LOGIN] Tokens issued for $email');
-      return Response.ok(jsonEncode({'token': tokens['accessToken'], 'refreshToken': tokens['refreshToken'], 'user': {'id': user['id'], 'email': user['email'], 'phone': user['phone']}}), headers: {'Content-Type': 'application/json'});
+      // Check if user is an admin (has admin passkey)
+      final isAdmin = (user['admin_passkey'] as String?) != null;
+      final role = isAdmin ? 'admin' : 'user';
+      print('🔑 [LOGIN] User role determined: $role (isAdmin=$isAdmin)');
+      
+      final tokens = _issueTokens(user['id'] as String, email, role: role);
+      print('✅ [LOGIN] Tokens issued for $email with role: $role');
+      return Response.ok(jsonEncode({'token': tokens['accessToken'], 'refreshToken': tokens['refreshToken'], 'user': {'id': user['id'], 'email': user['email'], 'phone': user['phone'], 'role': role}}), headers: {'Content-Type': 'application/json'});
     } catch (e) {
       print('❌ [LOGIN] Exception: $e');
       return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
@@ -834,6 +849,67 @@ void main(List<String> args) async {
       }), headers: {'Content-Type': 'application/json'});
     } catch (e) {
       print('❌ [ADMIN_LOGIN] Exception: $e');
+      return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
+    }
+  });
+
+  // Admin password reset (verify passkey, hash new password, update DB)
+  router.post('/api/auth/admin-reset-password', (Request request) async {
+    try {
+      final body = await request.readAsString();
+      print('🔐 [ADMIN_RESET] Raw body: $body');
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      final email = (data['email'] as String?)?.trim().toLowerCase();
+      final passkey = data['passkey'] as String?;
+      final newPassword = data['newPassword'] as String?;
+      
+      print('🔐 [ADMIN_RESET] Attempt for email: $email');
+      
+      if (email == null || passkey == null || newPassword == null) {
+        print('❌ [ADMIN_RESET] Missing parameters');
+        return Response(400, body: jsonEncode({'error': 'Missing parameters'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      if (newPassword.length < 6) {
+        print('❌ [ADMIN_RESET] New password too short');
+        return Response(400, body: jsonEncode({'error': 'Password must be at least 6 characters'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      // Verify user exists
+      final user = _dbGetUserByEmail(email);
+      if (user == null) {
+        print('❌ [ADMIN_RESET] User not found for email: $email');
+        return Response(401, body: jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      // Verify admin passkey
+      final adminPasskeyHash = user['admin_passkey'] as String?;
+      if (adminPasskeyHash == null || !BCrypt.checkpw(passkey, adminPasskeyHash)) {
+        print('❌ [ADMIN_RESET] Invalid passkey for $email');
+        return Response(401, body: jsonEncode({'error': 'Invalid passkey'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      print('✅ [ADMIN_RESET] Passkey verified for $email');
+      
+      // Hash the new password with BCrypt
+      final newPasswordHash = BCrypt.hashpw(newPassword, BCrypt.gensalt());
+      print('🔐 [ADMIN_RESET] New password hashed');
+      
+      // Update password in database
+      db.execute(
+        'UPDATE users SET password_hash = ? WHERE email = ?',
+        [newPasswordHash, email]
+      );
+      
+      print('✅ [ADMIN_RESET] Password updated for $email');
+      
+      return Response.ok(jsonEncode({
+        'success': true,
+        'message': 'Password reset successfully',
+        'email': email
+      }), headers: {'Content-Type': 'application/json'});
+    } catch (e) {
+      print('❌ [ADMIN_RESET] Exception: $e');
       return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
     }
   });
@@ -1370,8 +1446,12 @@ void main(List<String> args) async {
       final user = _dbGetUserById(userId);
       if (user == null) return Response(401, body: jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});
       
-      // Issue new tokens and create new session
-      final tokens = _issueTokens(userId, user['email'] as String?);
+      // Check if user is an admin (has admin passkey)
+      final isAdmin = (user['admin_passkey'] as String?) != null;
+      final role = isAdmin ? 'admin' : 'user';
+      
+      // Issue new tokens and create new session with correct role
+      final tokens = _issueTokens(userId, user['email'] as String?, role: role);
       return Response.ok(jsonEncode({'token': tokens['accessToken'], 'refreshToken': tokens['refreshToken']}), headers: {'Content-Type': 'application/json'});
     } catch (e) {
       return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
@@ -1492,7 +1572,7 @@ void main(List<String> args) async {
     }
   });
 
-  // Get all contributions
+  // Get all contributions (public - only approved)
   router.get('/api/contributions', (Request request) async {
     if (contribCollection == null) {
       return Response.ok(
@@ -1500,6 +1580,8 @@ void main(List<String> args) async {
         headers: {'Content-Type': 'application/json'},
       );
     }
+    // Return ALL contributions (both approved and pending) for community section
+    // Community section will display pending with status badge, approved without badge
     final all = await contribCollection?.find().toList() ?? [];
     return Response.ok(
       jsonEncode(all),
@@ -1562,7 +1644,689 @@ void main(List<String> args) async {
     }
   });
 
-  // Get contributions by category
+  // QUIZ & CHALLENGE ROUTES START
+  
+  // Submit quiz result (authenticated users)
+  router.post('/api/quiz-results', (Request request) async {
+    try {
+      if (quizResultsCollection == null) {
+        return Response(503,
+          body: jsonEncode({'error': 'Quiz results feature unavailable'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+      
+      final authHeader = request.headers['authorization'];
+      if (authHeader == null || !authHeader.startsWith('Bearer ')) {
+        return Response.forbidden(jsonEncode({'error': 'Authentication required'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      final token = authHeader.substring(7);
+      final userId = _verifyJWT(token);
+      if (userId == null) {
+        return Response.unauthorized(jsonEncode({'error': 'Invalid or expired token'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      final user = _dbGetUserById(userId);
+      if (user == null) {
+        return Response.forbidden(jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      final payload = await request.readAsString();
+      final data = jsonDecode(payload) as Map<String, dynamic>;
+      
+      // Add user information and timestamp
+      data['userId'] = userId;
+      data['userEmail'] = user['email'];
+      data['username'] = user['username'] ?? 'Unknown';
+      data['submittedAt'] = DateTime.now().toIso8601String();
+      
+      // Validate required fields
+      if (!data.containsKey('quizId') || !data.containsKey('score') || !data.containsKey('totalQuestions')) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing required fields: quizId, score, totalQuestions'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+      
+      final result = await quizResultsCollection?.insertOne(data);
+      print('✅ [QUIZ_RESULT] Saved: ${user['username']} scored ${data['score']}/${data['totalQuestions']}');
+      
+      return Response.ok(
+        jsonEncode({'success': result?.isSuccess ?? false, 'id': result?.id?.toHexString()}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      print('❌ [QUIZ_RESULT] Error: $e');
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Failed to save quiz result: $e'}),
+      );
+    }
+  });
+
+  // Get aggregated quiz statistics (public endpoint for leaderboard)
+  router.get('/api/quiz-results/leaderboard', (Request request) async {
+    try {
+      if (quizResultsCollection == null) {
+        return Response.ok(jsonEncode([]), headers: {'Content-Type': 'application/json'});
+      }
+      
+      // Aggregate quiz results by user
+      final pipeline = [
+        {
+          '\$group': {
+            '_id': '\$userEmail',
+            'username': {'\$first': '\$username'},
+            'totalQuizzes': {'\$sum': 1},
+            'totalScore': {'\$sum': '\$score'},
+            'totalQuestions': {'\$sum': '\$totalQuestions'},
+            'highestScore': {'\$max': '\$score'},
+          }
+        },
+        {
+          '\$project': {
+            '_id': 0,
+            'userEmail': '\$_id',
+            'username': 1,
+            'totalQuizzes': 1,
+            'totalScore': 1,
+            'totalQuestions': 1,
+            'averagePercentage': {
+              '\$cond': [
+                {'\$eq': ['\$totalQuestions', 0]},
+                0,
+                {'\$multiply': [{'\$divide': ['\$totalScore', '\$totalQuestions']}, 100]}
+              ]
+            },
+            'highestScore': 1,
+          }
+        },
+        {'\$sort': {'averagePercentage': -1}},
+        {'\$limit': 50} // Top 50 users
+      ];
+      
+      final results = await quizResultsCollection?.aggregateToStream(pipeline).toList() ?? [];
+      print('✅ [QUIZ_LEADERBOARD] Fetched ${results.length} users');
+      
+      return Response.ok(jsonEncode(results), headers: {'Content-Type': 'application/json'});
+    } catch (e) {
+      print('❌ [QUIZ_LEADERBOARD] Error: $e');
+      return Response.ok(jsonEncode([]), headers: {'Content-Type': 'application/json'});
+    }
+  });
+
+  // Submit daily challenge result (authenticated users)
+  router.post('/api/challenge-results', (Request request) async {
+    try {
+      if (challengeResultsCollection == null) {
+        return Response(503,
+          body: jsonEncode({'error': 'Challenge results feature unavailable'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+      
+      final authHeader = request.headers['authorization'];
+      if (authHeader == null || !authHeader.startsWith('Bearer ')) {
+        return Response.forbidden(jsonEncode({'error': 'Authentication required'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      final token = authHeader.substring(7);
+      final userId = _verifyJWT(token);
+      if (userId == null) {
+        return Response.unauthorized(jsonEncode({'error': 'Invalid or expired token'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      final user = _dbGetUserById(userId);
+      if (user == null) {
+        return Response.forbidden(jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      final payload = await request.readAsString();
+      final data = jsonDecode(payload) as Map<String, dynamic>;
+      
+      // Add user information and timestamp
+      data['userId'] = userId;
+      data['userEmail'] = user['email'];
+      data['username'] = user['username'] ?? 'Unknown';
+      data['submittedAt'] = DateTime.now().toIso8601String();
+      
+      // Validate required fields
+      if (!data.containsKey('challengeId') || !data.containsKey('completed')) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Missing required fields: challengeId, completed'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+      
+      final result = await challengeResultsCollection?.insertOne(data);
+      print('✅ [CHALLENGE_RESULT] Saved: ${user['username']} - Challenge ${data['challengeId']} - Won: ${data['wonPrize'] ?? false}');
+      
+      return Response.ok(
+        jsonEncode({'success': result?.isSuccess ?? false, 'id': result?.id?.toHexString()}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      print('❌ [CHALLENGE_RESULT] Error: $e');
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Failed to save challenge result: $e'}),
+      );
+    }
+  });
+
+  // Get challenge statistics (public endpoint for leaderboard)
+  router.get('/api/challenge-results/leaderboard', (Request request) async {
+    try {
+      if (challengeResultsCollection == null) {
+        return Response.ok(jsonEncode([]), headers: {'Content-Type': 'application/json'});
+      }
+      
+      // Aggregate challenge results by user
+      final pipeline = [
+        {
+          '\$group': {
+            '_id': '\$userEmail',
+            'username': {'\$first': '\$username'},
+            'totalChallenges': {'\$sum': 1},
+            'completedChallenges': {
+              '\$sum': {
+                '\$cond': [{'\$eq': ['\$completed', true]}, 1, 0]
+              }
+            },
+            'prizesWon': {
+              '\$sum': {
+                '\$cond': [{'\$eq': ['\$wonPrize', true]}, 1, 0]
+              }
+            },
+            'totalPoints': {'\$sum': {'\$ifNull': ['\$points', 0]}},
+          }
+        },
+        {
+          '\$project': {
+            '_id': 0,
+            'userEmail': '\$_id',
+            'username': 1,
+            'totalChallenges': 1,
+            'completedChallenges': 1,
+            'prizesWon': 1,
+            'totalPoints': 1,
+          }
+        },
+        {'\$sort': {'prizesWon': -1, 'totalPoints': -1}},
+        {'\$limit': 50} // Top 50 users
+      ];
+      
+      final results = await challengeResultsCollection?.aggregateToStream(pipeline).toList() ?? [];
+      print('✅ [CHALLENGE_LEADERBOARD] Fetched ${results.length} users');
+      
+      return Response.ok(jsonEncode(results), headers: {'Content-Type': 'application/json'});
+    } catch (e) {
+      print('❌ [CHALLENGE_LEADERBOARD] Error: $e');
+      return Response.ok(jsonEncode([]), headers: {'Content-Type': 'application/json'});
+    }
+  });
+
+  // Get combined leaderboard (contributions + quizzes + challenges)
+  router.get('/api/leaderboard/top-contributors', (Request request) async {
+    try {
+      print('📊 [TOP_CONTRIBUTORS] Fetching combined leaderboard');
+      
+      final Map<String, Map<String, dynamic>> userScores = {};
+      
+      // 1. Get contributions (weight: 50%)
+      if (contribCollection != null) {
+        final contributions = await contribCollection?.find({'status': 'approved'}).toList() ?? [];
+        for (final contrib in contributions) {
+          final email = contrib['authorEmail']?.toString() ?? '';
+          final username = contrib['authorName']?.toString() ?? contrib['authorUsername']?.toString() ?? '';
+          
+          if (email.isNotEmpty) {
+            if (!userScores.containsKey(email)) {
+              userScores[email] = {
+                'email': email,
+                'username': username,
+                'contributions': 0,
+                'quizScore': 0.0,
+                'challengePrizes': 0,
+                'totalScore': 0.0,
+              };
+            }
+            userScores[email]!['contributions'] = (userScores[email]!['contributions'] as int) + 1;
+          }
+        }
+      }
+      
+      // 2. Get quiz results (weight: 30%)
+      if (quizResultsCollection != null) {
+        final pipeline = [
+          {
+            '\$group': {
+              '_id': '\$userEmail',
+              'username': {'\$first': '\$username'},
+              'avgPercentage': {
+                '\$avg': {
+                  '\$multiply': [
+                    {'\$divide': ['\$score', '\$totalQuestions']},
+                    100
+                  ]
+                }
+              }
+            }
+          }
+        ];
+        final quizResults = await quizResultsCollection?.aggregateToStream(pipeline).toList() ?? [];
+        for (final result in quizResults) {
+          final email = result['_id']?.toString() ?? '';
+          final username = result['username']?.toString() ?? '';
+          final avgPercentage = (result['avgPercentage'] as num?)?.toDouble() ?? 0.0;
+          
+          if (email.isNotEmpty) {
+            if (!userScores.containsKey(email)) {
+              userScores[email] = {
+                'email': email,
+                'username': username,
+                'contributions': 0,
+                'quizScore': 0.0,
+                'challengePrizes': 0,
+                'totalScore': 0.0,
+              };
+            }
+            userScores[email]!['quizScore'] = avgPercentage;
+            if (username.isNotEmpty && userScores[email]!['username'].toString().isEmpty) {
+              userScores[email]!['username'] = username;
+            }
+          }
+        }
+      }
+      
+      // 3. Get challenge results (weight: 20%)
+      if (challengeResultsCollection != null) {
+        final pipeline = [
+          {
+            '\$group': {
+              '_id': '\$userEmail',
+              'username': {'\$first': '\$username'},
+              'prizesWon': {
+                '\$sum': {
+                  '\$cond': [{'\$eq': ['\$wonPrize', true]}, 1, 0]
+                }
+              }
+            }
+          }
+        ];
+        final challengeResults = await challengeResultsCollection?.aggregateToStream(pipeline).toList() ?? [];
+        for (final result in challengeResults) {
+          final email = result['_id']?.toString() ?? '';
+          final username = result['username']?.toString() ?? '';
+          final prizesWon = (result['prizesWon'] as int?) ?? 0;
+          
+          if (email.isNotEmpty) {
+            if (!userScores.containsKey(email)) {
+              userScores[email] = {
+                'email': email,
+                'username': username,
+                'contributions': 0,
+                'quizScore': 0.0,
+                'challengePrizes': 0,
+                'totalScore': 0.0,
+              };
+            }
+            userScores[email]!['challengePrizes'] = prizesWon;
+            if (username.isNotEmpty && userScores[email]!['username'].toString().isEmpty) {
+              userScores[email]!['username'] = username;
+            }
+          }
+        }
+      }
+      
+      // Calculate weighted scores
+      for (final entry in userScores.entries) {
+        final contributions = entry.value['contributions'] as int;
+        final quizScore = entry.value['quizScore'] as double;
+        final prizes = entry.value['challengePrizes'] as int;
+        
+        // Weighted formula: contributions (10 pts each, 50%) + quiz avg (30%) + prizes (20 pts each, 20%)
+        final totalScore = (contributions * 10 * 0.5) + (quizScore * 0.3) + (prizes * 20 * 0.2);
+        entry.value['totalScore'] = totalScore;
+      }
+      
+      // Sort by total score and take top 10
+      final sortedUsers = userScores.values.toList()
+        ..sort((a, b) => (b['totalScore'] as double).compareTo(a['totalScore'] as double));
+      
+      final top10 = sortedUsers.take(10).toList();
+      
+      print('✅ [TOP_CONTRIBUTORS] Returning ${top10.length} top users');
+      return Response.ok(jsonEncode(top10), headers: {'Content-Type': 'application/json'});
+    } catch (e) {
+      print('❌ [TOP_CONTRIBUTORS] Error: $e');
+      return Response.ok(jsonEncode([]), headers: {'Content-Type': 'application/json'});
+    }
+  });
+
+  // ADMIN ROUTES START
+  router.get('/api/admin/ping', (Request request) async {
+    final auth = request.headers['authorization'];
+    if (auth == null || !auth.startsWith('Bearer ')) return Response(401, body: jsonEncode({'error':'Unauthorized'}), headers: {'Content-Type':'application/json'});
+    if (!_isAdminToken(auth.substring(7))) return Response(403, body: jsonEncode({'error':'Forbidden'}), headers: {'Content-Type':'application/json'});
+    return Response.ok(jsonEncode({'ok': true}), headers: {'Content-Type':'application/json'});
+  });
+  router.get('/api/admin/contributions', (Request request) async {
+    final auth = request.headers['authorization'];
+    if (auth == null || !auth.startsWith('Bearer ')) return Response(401, body: jsonEncode({'error':'Unauthorized'}), headers: {'Content-Type':'application/json'});
+    
+    final token = auth.substring(7);
+    print('🔍 [ADMIN_CONTRIBUTIONS] Checking admin token');
+    
+    if (!_isAdminToken(token)) {
+      print('❌ [ADMIN_CONTRIBUTIONS] Admin token check failed');
+      return Response(403, body: jsonEncode({'error':'Forbidden'}), headers: {'Content-Type':'application/json'});
+    }
+    
+    print('✅ [ADMIN_CONTRIBUTIONS] Admin token verified');
+    
+    if (contribCollection == null) return Response.ok(jsonEncode([]), headers: {'Content-Type':'application/json'});
+    
+    // Build filter query from query parameters
+    final filter = <String, dynamic>{};
+    final status = request.url.queryParameters['status'];
+    final category = request.url.queryParameters['category'];
+    final type = request.url.queryParameters['type'];
+    
+    print('🔍 [ADMIN_CONTRIBUTIONS] Filters - status: $status, category: $category, type: $type');
+    
+    if (status != null && status != 'all') {
+      filter['status'] = status;
+    }
+    if (category != null && category != 'all') {
+      filter['category'] = category;
+    }
+    if (type != null && type != 'all') {
+      filter['type'] = type;
+    }
+    
+    final list = await contribCollection!.find(filter).toList();
+    print('📊 [ADMIN_CONTRIBUTIONS] Found ${list.length} contributions');
+    return Response.ok(jsonEncode(list), headers: {'Content-Type':'application/json'});
+  });
+  router.get('/api/admin/users', (Request request) async {
+    final auth = request.headers['authorization'];
+    if (auth == null || !auth.startsWith('Bearer ')) return Response(401, body: jsonEncode({'error':'Unauthorized'}), headers: {'Content-Type':'application/json'});
+    if (!_isAdminToken(auth.substring(7))) return Response(403, body: jsonEncode({'error':'Forbidden'}), headers: {'Content-Type':'application/json'});
+    
+    final rows = db.select('SELECT id, email, username, created_at FROM users WHERE admin_passkey IS NULL');
+    final out = <Map<String, dynamic>>[];
+    
+    // Get contribution count from MongoDB for each user
+    if (contribCollection != null) {
+      for (final r in rows) {
+        final userId = r['id'] as String;
+        final userEmail = r['email'] as String;
+        // Count contributions by authorEmail (which is how they're stored in MongoDB)
+        final count = await contribCollection?.count({'authorEmail': userEmail}) ?? 0;
+        out.add({
+          'id': userId,
+          'email': userEmail,
+          'username': r['username'],
+          'createdAt': r['created_at'],
+          'contributionCount': count,
+        });
+        print('[ADMIN] 👤 User $userEmail has $count contributions');
+      }
+    } else {
+      // Fallback if MongoDB is unavailable
+      out.addAll(rows.map((r) => {
+        'id': r['id'],
+        'email': r['email'],
+        'username': r['username'],
+        'createdAt': r['created_at'],
+        'contributionCount': 0,
+      }));
+    }
+    
+    print('[ADMIN] 📊 Loaded ${out.length} users with contribution counts');
+    return Response.ok(jsonEncode(out), headers: {'Content-Type':'application/json'});
+  });
+
+  // Get individual user details with contribution count
+  router.get('/api/admin/users/<userId>', (Request request, String userId) async {
+    try {
+      final auth = request.headers['authorization'];
+      if (auth == null || !auth.startsWith('Bearer ')) return Response(401, body: jsonEncode({'error':'Unauthorized'}), headers: {'Content-Type':'application/json'});
+      if (!_isAdminToken(auth.substring(7))) return Response(403, body: jsonEncode({'error':'Forbidden'}), headers: {'Content-Type':'application/json'});
+      
+      // Get user from SQLite
+      final rows = db.select('SELECT id, email, username, created_at FROM users WHERE id = ? AND admin_passkey IS NULL', [userId]);
+      if (rows.isEmpty) {
+        return Response.notFound(jsonEncode({'error': 'User not found'}), headers: {'Content-Type':'application/json'});
+      }
+      
+      final user = rows.first;
+      final userEmail = user['email'] as String;
+      // Count contributions by authorEmail (which is how they're stored in MongoDB)
+      final count = (contribCollection != null) ? await contribCollection?.count({'authorEmail': userEmail}) ?? 0 : 0;
+      
+      final userData = {
+        'id': user['id'],
+        'email': userEmail,
+        'username': user['username'],
+        'createdAt': user['created_at'],
+        'contributionCount': count,
+      };
+      
+      print('[ADMIN] 📋 Retrieved user details for $userId ($userEmail): $count contributions');
+      return Response.ok(jsonEncode(userData), headers: {'Content-Type':'application/json'});
+    } catch (e) {
+      print('[ADMIN] ❌ Error getting user details: $e');
+      return Response.internalServerError(body: jsonEncode({'error': 'Error: $e'}), headers: {'Content-Type':'application/json'});
+    }
+  });
+
+  // Delete user and all their contributions
+  router.delete('/api/admin/users/<userId>', (Request request, String userId) async {
+    try {
+      final auth = request.headers['authorization'];
+      if (auth == null || !auth.startsWith('Bearer ')) return Response(401, body: jsonEncode({'error':'Unauthorized'}), headers: {'Content-Type':'application/json'});
+      if (!_isAdminToken(auth.substring(7))) return Response(403, body: jsonEncode({'error':'Forbidden'}), headers: {'Content-Type':'application/json'});
+      
+      print('[ADMIN] 🗑️ Starting user deletion for: $userId');
+      
+      // Get user first to verify they exist
+      final rows = db.select('SELECT id, email FROM users WHERE id = ? AND admin_passkey IS NULL', [userId]);
+      if (rows.isEmpty) {
+        return Response.notFound(jsonEncode({'error': 'User not found'}), headers: {'Content-Type':'application/json'});
+      }
+      
+      final userEmail = rows.first['email'] as String;
+      
+      // Delete all contributions from MongoDB
+      if (contribCollection != null) {
+        await contribCollection?.deleteMany({'userId': userId});
+        print('[ADMIN] 🗑️ Deleted all contributions for user $userId');
+      }
+      
+      // Delete user from SQLite
+      db.execute('DELETE FROM users WHERE id = ?', [userId]);
+      print('[ADMIN] ✅ Deleted user: $userEmail ($userId)');
+      
+      return Response.ok(jsonEncode({'success': true, 'message': 'User and their contributions deleted'}), headers: {'Content-Type':'application/json'});
+    } catch (e) {
+      print('[ADMIN] ❌ Error deleting user: $e');
+      return Response.internalServerError(body: jsonEncode({'error': 'Error: $e'}), headers: {'Content-Type':'application/json'});
+    }
+  });
+
+  // Update contribution status (PATCH) - admin only
+  router.patch('/api/admin/contributions/<id>/status', (Request request, String id) async {
+    try {
+      final auth = request.headers['authorization'];
+      if (auth == null || !auth.startsWith('Bearer ')) return Response(401, body: jsonEncode({'error':'Unauthorized'}), headers: {'Content-Type':'application/json'});
+      if (!_isAdminToken(auth.substring(7))) return Response(403, body: jsonEncode({'error':'Forbidden'}), headers: {'Content-Type':'application/json'});
+      
+      if (contribCollection == null) {
+        return Response(503, body: jsonEncode({'error': 'MongoDB connection unavailable'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      ObjectId docId;
+      try {
+        docId = ObjectId.parse(id);
+      } catch (e) {
+        return Response.badRequest(body: jsonEncode({'error': 'Invalid document ID format'}));
+      }
+
+      final body = await request.readAsString();
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      final status = data['status'] as String?;
+      final adminNote = data['adminNote'] as String?;
+
+      if (status == null) {
+        return Response.badRequest(body: jsonEncode({'error': 'Status is required'}));
+      }
+
+      final doc = await contribCollection?.findOne({'_id': docId});
+      if (doc == null) {
+        return Response.notFound(jsonEncode({'error': 'Contribution not found'}));
+      }
+
+      final updateData = <String, dynamic>{'status': status};
+      if (adminNote != null) {
+        updateData['adminNote'] = adminNote;
+      }
+
+      await contribCollection?.updateOne({'_id': docId}, {'\$set': updateData});
+      print('✅ [ADMIN] Contribution $id status updated to $status');
+
+      return Response.ok(
+        jsonEncode({'success': true, 'status': status}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      print('❌ [ADMIN] Error updating status: $e');
+      return Response.internalServerError(body: jsonEncode({'error': 'Failed to update contribution: $e'}), headers: {'Content-Type': 'application/json'});
+    }
+  });
+
+  // Delete contribution - admin only
+  router.delete('/api/admin/contributions/<id>', (Request request, String id) async {
+    try {
+      final auth = request.headers['authorization'];
+      if (auth == null || !auth.startsWith('Bearer ')) return Response(401, body: jsonEncode({'error':'Unauthorized'}), headers: {'Content-Type':'application/json'});
+      if (!_isAdminToken(auth.substring(7))) return Response(403, body: jsonEncode({'error':'Forbidden'}), headers: {'Content-Type':'application/json'});
+      
+      if (contribCollection == null) {
+        return Response(503, body: jsonEncode({'error': 'MongoDB connection unavailable'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      ObjectId docId;
+      try {
+        docId = ObjectId.parse(id);
+      } catch (e) {
+        return Response.badRequest(body: jsonEncode({'error': 'Invalid document ID format'}));
+      }
+
+      final doc = await contribCollection?.findOne({'_id': docId});
+      if (doc == null) {
+        return Response.notFound(jsonEncode({'error': 'Contribution not found'}));
+      }
+
+      await contribCollection?.deleteOne({'_id': docId});
+
+      print('✅ [ADMIN] Contribution $id deleted');
+      return Response.ok(
+        jsonEncode({'success': true}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      print('❌ [ADMIN] Error deleting contribution: $e');
+      return Response.internalServerError(body: jsonEncode({'error': 'Failed to delete contribution: $e'}), headers: {'Content-Type': 'application/json'});
+    }
+  });
+
+  // Bulk approve contributions - admin only
+  router.post('/api/admin/contributions/bulk-approve', (Request request) async {
+    try {
+      final auth = request.headers['authorization'];
+      if (auth == null || !auth.startsWith('Bearer ')) return Response(401, body: jsonEncode({'error':'Unauthorized'}), headers: {'Content-Type':'application/json'});
+      if (!_isAdminToken(auth.substring(7))) return Response(403, body: jsonEncode({'error':'Forbidden'}), headers: {'Content-Type':'application/json'});
+      
+      if (contribCollection == null) {
+        return Response(503, body: jsonEncode({'error': 'MongoDB connection unavailable'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      final body = await request.readAsString();
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      final ids = (data['ids'] as List<dynamic>?)?.cast<String>() ?? [];
+
+      if (ids.isEmpty) {
+        return Response.badRequest(body: jsonEncode({'error': 'No IDs provided'}));
+      }
+
+      int approvedCount = 0;
+      for (final id in ids) {
+        try {
+          final docId = ObjectId.parse(id);
+          await contribCollection?.updateOne(
+            {'_id': docId},
+            {'\$set': {'status': 'approved'}}
+          );
+          approvedCount++;
+        } catch (e) {
+          print('❌ [ADMIN] Error approving $id: $e');
+        }
+      }
+
+      print('✅ [ADMIN] Approved $approvedCount contributions');
+      return Response.ok(
+        jsonEncode({'success': true, 'approvedCount': approvedCount}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      print('❌ [ADMIN] Error in bulk approve: $e');
+      return Response.internalServerError(body: jsonEncode({'error': 'Failed to approve contributions: $e'}), headers: {'Content-Type': 'application/json'});
+    }
+  });
+
+  // Bulk delete contributions - admin only
+  router.post('/api/admin/contributions/bulk-delete', (Request request) async {
+    try {
+      final auth = request.headers['authorization'];
+      if (auth == null || !auth.startsWith('Bearer ')) return Response(401, body: jsonEncode({'error':'Unauthorized'}), headers: {'Content-Type':'application/json'});
+      if (!_isAdminToken(auth.substring(7))) return Response(403, body: jsonEncode({'error':'Forbidden'}), headers: {'Content-Type':'application/json'});
+      
+      if (contribCollection == null) {
+        return Response(503, body: jsonEncode({'error': 'MongoDB connection unavailable'}), headers: {'Content-Type': 'application/json'});
+      }
+
+      final body = await request.readAsString();
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      final ids = (data['ids'] as List<dynamic>?)?.cast<String>() ?? [];
+
+      if (ids.isEmpty) {
+        return Response.badRequest(body: jsonEncode({'error': 'No IDs provided'}));
+      }
+
+      int deletedCount = 0;
+      for (final id in ids) {
+        try {
+          final docId = ObjectId.parse(id);
+          await contribCollection?.deleteOne({'_id': docId});
+          deletedCount++;
+        } catch (e) {
+          print('❌ [ADMIN] Error deleting $id: $e');
+        }
+      }
+
+      print('✅ [ADMIN] Deleted $deletedCount contributions');
+      return Response.ok(
+        jsonEncode({'success': true, 'deletedCount': deletedCount}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      print('❌ [ADMIN] Error in bulk delete: $e');
+      return Response.internalServerError(body: jsonEncode({'error': 'Failed to delete contributions: $e'}), headers: {'Content-Type': 'application/json'});
+    }
+  });;
+
+  // ADMIN ROUTES END  // Get contributions by category (public - only approved)
   router.get('/api/contributions/<category>', (Request request, String category) async {
     if (contribCollection == null) {
       return Response.ok(
@@ -1570,7 +2334,8 @@ void main(List<String> args) async {
         headers: {'Content-Type': 'application/json'},
       );
     }
-    final filtered = await contribCollection?.find({'category': category}).toList() ?? [];
+    // Only return approved contributions to public
+    final filtered = await contribCollection?.find({'category': category, 'status': 'approved'}).toList() ?? [];
     return Response.ok(
       jsonEncode(filtered),
       headers: {'Content-Type': 'application/json'},
@@ -1649,6 +2414,8 @@ void main(List<String> args) async {
       data['authorName'] = username;
       data['authorUsername'] = username;
       data['authorEmail'] = email;
+      // Set status to pending - content must be approved by admin before showing in community
+      data['status'] = 'pending';
       final result = await contribCollection?.insertOne(data);
       return Response.ok(
         jsonEncode({'success': result?.isSuccess ?? false, 'id': result?.id?.toHexString()}),
@@ -1712,11 +2479,12 @@ void main(List<String> args) async {
       final data = jsonDecode(payload) as Map<String, dynamic>;
       print('✅ Payload decoded, updating document...');
       
-      // Preserve serverCreatedAt, authorId, authorUsername, authorName
+      // Preserve serverCreatedAt, authorId, authorUsername, authorName, and status
       data['serverCreatedAt'] = doc['serverCreatedAt'];
       data['authorId'] = doc['authorId'];
       data['authorUsername'] = doc['authorUsername'];
       data['authorName'] = doc['authorName'];
+      data['status'] = doc['status']; // Preserve approval status
       data['updatedAt'] = DateTime.now().toIso8601String();
       
       await contribCollection?.updateOne({'_id': docId}, {'\$set': data});
@@ -1946,9 +2714,28 @@ void main(List<String> args) async {
         return Response.notFound(jsonEncode({'error': 'Contribution not found'}));
       }
 
-      // Update status to 'rejected'
-      await contribCollection?.updateOne({'_id': docId}, {'\$set': {'status': 'rejected'}});
-      print('✅ [REJECT] Contribution $id rejected');
+      // Parse request body for rejection reason
+      String? rejectionReason;
+      try {
+        final bodyString = await request.readAsString();
+        if (bodyString.isNotEmpty) {
+          final bodyData = jsonDecode(bodyString);
+          rejectionReason = bodyData['rejectionReason'] as String?;
+          print('📝 [REJECT] Rejection reason: ${rejectionReason ?? "No reason provided"}');
+        }
+      } catch (e) {
+        print('⚠️ [REJECT] Failed to parse request body: $e');
+        // Continue with rejection even if body parsing fails
+      }
+
+      // Update status to 'rejected' and optionally add rejection reason
+      final updateData = <String, dynamic>{'status': 'rejected'};
+      if (rejectionReason != null && rejectionReason.isNotEmpty) {
+        updateData['rejectionReason'] = rejectionReason;
+      }
+      
+      await contribCollection?.updateOne({'_id': docId}, {'\$set': updateData});
+      print('✅ [REJECT] Contribution $id rejected${rejectionReason != null ? " with reason" : ""}');
 
       return Response.ok(
         jsonEncode({'success': true, 'status': 'rejected'}),

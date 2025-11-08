@@ -4,7 +4,7 @@ import '../models/user_content.dart';
 import '../services/user_content_service.dart';
 import '../widgets/username_setup_dialog.dart';
 import 'bulk_import_screen.dart';
-import '../widgets/theme_toggle_widget.dart';
+import '../widgets/theme_toggle_button.dart';
 
 class AddContentScreen extends StatefulWidget {
   final UserContent? existingContent; // For editing
@@ -178,11 +178,11 @@ class _AddContentScreenState extends State<AddContentScreen> {
         _isLoading = false;
         _successMessage = widget.existingContent != null
             ? 'Content updated successfully! ✅'
-            : 'Content added successfully! ✅';
+            : 'Content added successfully! ✅\n⏳ Waiting for admin approval to appear in community';
       });
       
       // Wait a moment then go back
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(const Duration(seconds: 2));
       if (mounted) {
         Navigator.of(context).pop(true);
       }
@@ -226,7 +226,7 @@ class _AddContentScreenState extends State<AddContentScreen> {
             onPressed: () => _showHelpDialog(),
             tooltip: 'Help',
           ),
-          const ThemeToggleWidget(),
+          const ThemeToggleButton(size: 24, padding: EdgeInsets.only(right: 16)),
         ],
       ),
       body: _username == null

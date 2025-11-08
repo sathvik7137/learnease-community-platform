@@ -12,11 +12,15 @@
 .swiftpm/
 migrate_working_dir/
 
-# Database and local files
+# Database and local files (NEVER COMMIT - Contains user data)
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 users.db
+community_server/users.db
 
 # IntelliJ related
 *.iml
@@ -49,4 +53,21 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
-/.env
+
+# Environment and credentials (NEVER COMMIT)
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Logs
+*.log
+server.log
+reset_otp_debug.log
+
+# Test/debug output files
+community_server/test_output.txt
+community_server/user_check.txt
+community_server/email_list.txt
+community_server/users.json
+community_server/contributions.json

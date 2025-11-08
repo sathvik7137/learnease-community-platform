@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../config/api_config.dart';
 
 /// AIService (Gemini/proxy-only)
 /// Client-side wrapper that posts user messages to a server-side AI proxy.
@@ -25,7 +26,7 @@ class AIService {
       }
     }
 
-    final proxyBase = safeEnv('AI_PROXY_BASE', safeEnv('AI_API_BASE', 'http://localhost:8080/api/ai'));
+    final proxyBase = safeEnv('AI_PROXY_BASE', safeEnv('AI_API_BASE', '${ApiConfig.webBaseUrl}/api/ai'));
     final timeoutMs = int.tryParse(safeEnv('AI_TIMEOUT_MS', '15000')) ?? 15000;
     final model = safeEnv('AI_MODEL', 'models/gemini-1');
 

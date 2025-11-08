@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'dart:ui';
+import 'package:provider/provider.dart';
 import '../models/user_content.dart';
 import '../services/user_content_service.dart';
 import '../services/auth_service.dart';
-import '../utils/app_theme.dart';
+import '../widgets/enhanced_ui_components.dart';
+import '../providers/theme_provider.dart';
 import 'add_content_screen.dart';
 import 'sign_in_screen.dart';
 import 'dart:async';
+import 'dart:convert';
 
 class CommunityContributionsScreen extends StatefulWidget {
   const CommunityContributionsScreen({super.key});
@@ -15,7 +19,7 @@ class CommunityContributionsScreen extends StatefulWidget {
   State<CommunityContributionsScreen> createState() => _CommunityContributionsScreenState();
 }
 
-class _CommunityContributionsScreenState extends State<CommunityContributionsScreen> with SingleTickerProviderStateMixin, TickerProviderStateMixin {
+class _CommunityContributionsScreenState extends State<CommunityContributionsScreen> with TickerProviderStateMixin {
   late TabController _tabController;
   late AnimationController _loadingAnimController;
   bool _isLoading = false;
@@ -30,14 +34,18 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   String? _currentUsername;
   String? _currentEmail;
   
-  // Aggressive caching mechanism
+  // Caching mechanism with shorter validity for fresher data
   static final Map<String, List<UserContent>> _globalContributionCache = {};
   static final Map<String, DateTime> _globalLastFetchTime = {};
-  static const Duration _cacheValidityDuration = Duration(minutes: 10);
+  static const Duration _cacheValidityDuration = Duration(seconds: 30); // Reduced from 10 minutes to 30 seconds
   
   // Track if we're currently fetching to prevent duplicate requests
   static final Map<String, bool> _isFetching = {};
   bool _hasMadeInitialFetch = false;
+  
+  // Throttle stream updates to prevent endless loops
+  DateTime? _lastStreamUpdate;
+  static const Duration _streamUpdateThrottle = Duration(milliseconds: 500);
 
   @override
   void initState() {
@@ -49,6 +57,10 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     )..repeat();
     
     _tabController.addListener(_onTabChanged);
+    
+    // Always clear cache and fetch fresh data on init to show latest content
+    _globalContributionCache.clear();
+    _globalLastFetchTime.clear();
     _loadContributions();
     _loadCurrentUserInfo();
     
@@ -64,7 +76,6 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   }
   
   void _onTabChanged() {
-    print('[Community] Tab changed to index ${_tabController.index}');
     // Only load if we don't have cached data or it's stale
     _loadContributions();
   }
@@ -81,11 +92,17 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
       _currentUsername = isLoggedIn ? username : null;
       _currentEmail = isLoggedIn ? email : null;
     });
-    
-    print('[Community] Auth check - Token: ${token?.isNotEmpty}, Username: $username, LoggedIn: $isLoggedIn');
   }
   
   void _updateContributionsFromStream(List<UserContent> allContributions) {
+    // Throttle stream updates to prevent endless rebuild loops
+    final now = DateTime.now();
+    if (_lastStreamUpdate != null && 
+        now.difference(_lastStreamUpdate!) < _streamUpdateThrottle) {
+      return;
+    }
+    _lastStreamUpdate = now;
+    
     final category = _tabController.index == 0 ? CourseCategory.java : CourseCategory.dbms;
     final filtered = allContributions.where((c) {
       final matchCategory = c.category == category;
@@ -93,9 +110,16 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
       return matchCategory && matchType;
     }).toList();
     
+    // Check if this is actually different from current contributions
+    // to avoid unnecessary rebuilds
+    if (_contributions.length == filtered.length &&
+        _contributions.asMap().entries.every((entry) =>
+            entry.value.id == filtered[entry.key].id)) {
+      return;
+    }
+    
     // Update global cache with new data from stream
     final cacheKey = _getCacheKey(category);
-    print('[Community] Stream update: $cacheKey got ${filtered.length} items');
     _globalContributionCache[cacheKey] = filtered;
     _globalLastFetchTime[cacheKey] = DateTime.now();
     
@@ -115,6 +139,17 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     return '${category.toString()}_${_filterType?.toString() ?? 'all'}';
   }
   
+  // Public method to force refresh - clears cache and reloads
+  Future<void> forceRefresh() async {
+    // Clear all cache
+    _globalContributionCache.clear();
+    _globalLastFetchTime.clear();
+    print('[Community] 🔄 Force refresh: Cache cleared');
+    
+    // Reload contributions
+    await _loadContributions();
+  }
+  
   @override
   void dispose() {
     _tabController.dispose();
@@ -131,7 +166,6 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     
     // Check if we're already fetching this category to prevent duplicates
     if (_isFetching[cacheKey] == true) {
-      print('[Community] ⏭️ Already fetching $cacheKey, skipping duplicate request');
       return;
     }
     
@@ -140,11 +174,8 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     final lastFetch = _globalLastFetchTime[cacheKey];
     final isCacheFresh = lastFetch != null && DateTime.now().difference(lastFetch) < _cacheValidityDuration;
     
-    print('[Community] Cache check for $cacheKey: cached=${cachedData != null}, fresh=$isCacheFresh, age=${lastFetch != null ? DateTime.now().difference(lastFetch).inSeconds : 'N/A'}s');
-    
     // If cache is fresh and we have data, use it immediately without loading indicator or fetching
     if (cachedData != null && isCacheFresh) {
-      print('[Community] ✅ Fresh cache hit for $cacheKey, showing ${cachedData.length} items instantly');
       if (mounted) {
         setState(() {
           _contributions = cachedData;
@@ -157,7 +188,6 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     
     // If we have cached data but it's stale, show it while fetching in background
     if (cachedData != null && !isCacheFresh) {
-      print('[Community] 📦 Stale cache for $cacheKey, showing cached ${cachedData.length} items while refreshing');
       if (mounted) {
         setState(() {
           _contributions = cachedData;
@@ -168,7 +198,6 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
       }
     } else {
       // No cached data, show loading
-      print('[Community] ⏳ No cache for $cacheKey, showing loading indicator');
       if (mounted) {
         setState(() {
           _isLoading = true;
@@ -191,9 +220,8 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     });
     
     try {
-      print('[Community] 🔄 Fetching fresh data for $cacheKey...');
-      // Fetch fresh data
-      final contributions = await UserContentService.getContributions(category: category, type: _filterType);
+      // Fetch fresh data - include both approved and pending (pending shows with special badge)
+      final contributions = await UserContentService.getCommunityContributions(category: category, type: _filterType);
       
       // Stop timer immediately
       _loadingTimer?.cancel();
@@ -201,8 +229,6 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
       // Update global cache and timestamp
       _globalContributionCache[cacheKey] = contributions;
       _globalLastFetchTime[cacheKey] = DateTime.now();
-      
-      print('[Community] ✅ Fresh fetch complete for $cacheKey, got ${contributions.length} items');
       
       // Update contributions and hide loading
       if (mounted) {
@@ -484,56 +510,42 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     final colors = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      appBar: _selectionMode
-          ? AppBar(
-              title: Text('${_selectedIndices.length} selected'),
-              leading: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: _clearSelection,
-              ),
-              actions: [
-                if (_selectedIndices.length < _contributions.length)
-                  IconButton(
-                    icon: const Icon(Icons.select_all),
-                    onPressed: _selectAll,
-                    tooltip: 'Select All',
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: _deleteSelected,
-                  tooltip: 'Delete Selected',
+    return DefaultTabController(
+      length: 2,
+      initialIndex: _tabController.index,
+      child: Scaffold(
+        appBar: _selectionMode
+            ? AppBar(
+                title: Text('${_selectedIndices.length} selected'),
+                leading: IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: _clearSelection,
                 ),
-              ],
-            )
-          : PreferredSize(
-              preferredSize: const Size.fromHeight(120),
-              child: Container(
-                color: isDark ? const Color(0xFF121212) : Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Selection mode toggle - only show if there are contributions
-                    if (_contributions.isNotEmpty)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: IconButton(
-                          icon: const Icon(Icons.checklist),
-                          onPressed: () {
-                            setState(() => _selectionMode = true);
-                          },
-                          tooltip: 'Enable selection mode',
-                          constraints: const BoxConstraints.tightFor(width: 48, height: 48),
-                          padding: EdgeInsets.zero,
-                        ),
-                      ),
-                    // Tab bar
-                    Align(
-                      alignment: Alignment.bottomCenter,
-                      child: Container(
+                actions: [
+                  if (_selectedIndices.length < _contributions.length)
+                    IconButton(
+                      icon: const Icon(Icons.select_all),
+                      onPressed: _selectAll,
+                      tooltip: 'Select All',
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: _deleteSelected,
+                    tooltip: 'Delete Selected',
+                  ),
+                ],
+              )
+            : PreferredSize(
+                preferredSize: const Size.fromHeight(70),
+                child: Container(
+                  color: isDark ? const Color(0xFF121212) : Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Container(
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(8),
                           boxShadow: [
                             BoxShadow(
                               color: colors.primary.withOpacity(0.1),
@@ -542,56 +554,332 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
                             ),
                           ],
                         ),
-                        child: TabBar(
-                          controller: _tabController,
-                          tabs: const [
-                            Tab(text: 'Java'),
-                            Tab(text: 'DBMS'),
-                          ],
-                          indicator: UnderlineTabIndicator(
-                            borderSide: BorderSide(
-                              color: colors.primary,
-                              width: 3.0,
+                        child: Row(
+                          children: [
+                            // Java Tab
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () {
+                                  _tabController.animateTo(0);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 12.0),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: _tabController.index == 0
+                                            ? colors.primary
+                                            : Colors.transparent,
+                                        width: 3.0,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.code,
+                                        size: 18,
+                                        color: _tabController.index == 0
+                                            ? colors.primary
+                                            : colors.onSurface.withOpacity(0.5),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Java',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                          color: _tabController.index == 0
+                                              ? colors.primary
+                                              : colors.onSurface.withOpacity(0.5),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                          labelColor: colors.primary,
-                          unselectedLabelColor: colors.onSurface.withOpacity(0.5),
-                          dividerColor: colors.outline,
+                            // DBMS Tab
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () {
+                                  _tabController.animateTo(1);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 12.0),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: _tabController.index == 1
+                                            ? colors.primary
+                                            : Colors.transparent,
+                                        width: 3.0,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.storage,
+                                        size: 18,
+                                        color: _tabController.index == 1
+                                            ? colors.primary
+                                            : colors.onSurface.withOpacity(0.5),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'DBMS',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                          color: _tabController.index == 1
+                                              ? colors.primary
+                                              : colors.onSurface.withOpacity(0.5),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // Add Content Button
+                            IconButton(
+                              icon: Icon(
+                                Icons.add_circle_outline,
+                                color: colors.primary,
+                                size: 28,
+                              ),
+                              onPressed: _handleAddContentPress,
+                              tooltip: 'Add Content',
+                            ),
+                          ],
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: isDark
+                  ? [
+                      const Color(0xFF0F1419),
+                      const Color(0xFF1A1E27),
+                      const Color(0xFF121820),
+                    ]
+                  : [
+                      const Color(0xFFF8FAFB),
+                      const Color(0xFFF3F5F7),
+                      const Color(0xFFEEF1F4),
+                    ],
+            ),
+          ),
+          child: _isLoading
+              ? _buildLoadingState()
+              : _contributions.isEmpty
+                  ? _buildEmptyState()
+                  : RefreshIndicator(
+                      onRefresh: _loadContributions,
+                      child: ListView(
+                        padding: const EdgeInsets.all(16.0),
+                        children: [
+                          ..._buildApprovedSection(isDark),
+                          ..._buildPendingSection(isDark),
+                          ..._buildRejectedSection(isDark),
+                        ],
+                      ),
+                    ),
+        ),
+        floatingActionButton: _selectionMode
+            ? FloatingActionButton.extended(
+                onPressed: _deleteSelected,
+                icon: const Icon(Icons.delete),
+                label: Text('Delete (${_selectedIndices.length})'),
+                backgroundColor: Colors.red,
+              )
+            : null,
+      ),
+    );
+  }
+
+  Widget _buildTimelineApprovalCard(bool isDark) {
+    const primaryColor = Color(0xFF5C6BC0);
+    const accentColor = Color(0xFF7E57C2);
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [primaryColor, accentColor],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: primaryColor.withOpacity(0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.2),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.timeline,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Content Approval Journey',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontSize: 18,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Track your submission through the approval stages',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white.withOpacity(0.85),
+                        letterSpacing: 0.2,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-      body: _isLoading
-          ? _buildLoadingState()
-          : _contributions.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: _loadContributions,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16.0),
-                    itemCount: _contributions.length,
-                    itemBuilder: (context, index) {
-                      final content = _contributions[index];
-                      return _buildContentCard(content, _currentUsername, _currentEmail, index);
-                    },
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Timeline stages
+          Row(
+            children: [
+              _buildTimelineStage('✅', 'Submit', 0),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Container(
+                    height: 1.5,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF3B82F6).withOpacity(0.25),
+                          const Color(0xFF8B5CF6).withOpacity(0.25),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(1),
+                    ),
                   ),
                 ),
-      floatingActionButton: _selectionMode
-          ? FloatingActionButton.extended(
-              onPressed: _deleteSelected,
-              icon: const Icon(Icons.delete),
-              label: Text('Delete (${_selectedIndices.length})'),
-              backgroundColor: Colors.red,
-            )
-          : FloatingActionButton.extended(
-              onPressed: _handleAddContentPress,
-              icon: const Icon(Icons.add),
-              label: const Text('Add Content'),
-              tooltip: 'Add Content',
+              ),
+              _buildTimelineStage('⏳', 'Review', 1),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Container(
+                    height: 1.5,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF8B5CF6).withOpacity(0.25),
+                          const Color(0xFF10B981).withOpacity(0.25),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(1),
+                    ),
+                  ),
+                ),
+              ),
+              _buildTimelineStage('✔️', 'Approved', 2),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Container(
+                    height: 1.5,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF10B981).withOpacity(0.25),
+                          const Color(0xFF10B981).withOpacity(0.15),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(1),
+                    ),
+                  ),
+                ),
+              ),
+              _buildTimelineStage('📱', 'Live', 3),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineStage(String emoji, String label, int index) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF3B82F6).withOpacity(0.2),
+                const Color(0xFF8B5CF6).withOpacity(0.15),
+              ],
             ),
+            border: Border.all(
+              color: const Color(0xFF3B82F6).withOpacity(0.4),
+              width: 1.5,
+            ),
+          ),
+          child: Center(
+            child: Text(emoji, style: const TextStyle(fontSize: 18)),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Colors.white.withOpacity(0.7),
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
     );
   }
 
@@ -638,7 +926,102 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
     );
   }
 
+  Widget _buildApprovalInfoBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16.0),
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.blue.shade50,
+            Colors.blue.shade100.withOpacity(0.5),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.shade300, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.pending_actions,
+                  color: Colors.blue.shade700,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '⏳ Content Approval Process',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue.shade900,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'New content requires admin review before appearing here',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.blue.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue.shade600, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '✅ Submit content → ⏳ Pending review → ✔️ Approved → 📱 Appears in community',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.blue.shade700,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmptyState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final categoryName = _tabController.index == 0 ? 'Java' : 'DBMS';
     return Center(
       child: Padding(
@@ -659,6 +1042,58 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
               'Be the first to add $categoryName content!',
               style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
+            SizedBox(height: 32),
+            // Info box explaining the approval process
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF2A2F3F)
+                    : const Color(0xFFF0F2FF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF5C6BC0).withOpacity(isDark ? 0.3 : 0.2),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF5C6BC0).withOpacity(isDark ? 0.1 : 0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.schedule,
+                        color: const Color(0xFF5C6BC0),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'How Content Gets Approved',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : const Color(0xFF1F2937),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildApprovalStep(1, 'Add Content', 'Submit your contribution', isDark),
+                  const SizedBox(height: 8),
+                  _buildApprovalStep(2, 'Admin Review', 'Content is reviewed by admins', isDark),
+                  const SizedBox(height: 8),
+                  _buildApprovalStep(3, 'Approved', 'Content appears in community', isDark),
+                ],
+              ),
+            ),
             SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: _handleAddContentPress,
@@ -670,7 +1105,411 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
       ),
     );
   }
-  Widget _buildContentCard(UserContent content, String? currentUsername, String? currentEmail, int index) {
+
+  Widget _buildApprovalStep(int step, String title, String description, bool isDark) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: const Color(0xFF5C6BC0),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Center(
+            child: Text(
+              step.toString(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : const Color(0xFF1F2937),
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark
+                      ? const Color(0xFFB0B5C6)
+                      : const Color(0xFF6B7280),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildApprovedSection(bool isDark) {
+    // Approved content visible to EVERYONE
+    final approved = _contributions.where((c) => c.status == ContentStatus.approved).toList();
+    if (approved.isEmpty) return [];
+    
+    final widgets = <Widget>[
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16.0),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF10B981).withOpacity(0.15),
+                border: Border.all(
+                  color: const Color(0xFF10B981).withOpacity(0.4),
+                  width: 1,
+                ),
+              ),
+              child: const Icon(
+                Icons.verified_outlined,
+                color: Color(0xFF10B981),
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Approved Content',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : const Color(0xFF1F2937),
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Curated learning resources',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.white.withOpacity(0.55) : Colors.grey[700],
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF10B981).withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                approved.length.toString(),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF10B981),
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+    
+    for (int i = 0; i < approved.length; i++) {
+      widgets.add(_buildContentCard(approved[i], _currentUsername, _currentEmail, i, isDark));
+    }
+    
+    return widgets;
+  }
+
+  List<Widget> _buildPendingSection(bool isDark) {
+    // Pending content visible ONLY to the owner
+    final currentUsernameNormalized = _currentUsername?.trim().toLowerCase() ?? '';
+    final pending = _contributions.where((c) {
+      // Only show pending if logged in AND is the owner
+      final isOwner = _currentUsername != null && 
+                      _currentUsername!.isNotEmpty && 
+                      c.authorName.trim().toLowerCase() == currentUsernameNormalized;
+      return c.status == ContentStatus.pending && isOwner;
+    }).toList();
+    
+    if (pending.isEmpty) return [];
+    
+    final widgets = <Widget>[
+      Padding(
+        padding: const EdgeInsets.only(top: 24, bottom: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFF59E0B).withOpacity(0.15),
+                border: Border.all(
+                  color: const Color(0xFFF59E0B).withOpacity(0.4),
+                  width: 1,
+                ),
+              ),
+              child: const Icon(
+                Icons.pending_outlined,
+                color: Color(0xFFF59E0B),
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'My Pending Submissions',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : const Color(0xFF1F2937),
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Awaiting admin review',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.white.withOpacity(0.55) : Colors.grey[700],
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFF59E0B).withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                pending.length.toString(),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFFF59E0B),
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      Container(
+        padding: const EdgeInsets.all(12),
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF59E0B).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFF59E0B).withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFF59E0B).withOpacity(0.2),
+              ),
+              child: const Icon(
+                Icons.info_outlined,
+                size: 14,
+                color: Color(0xFFF59E0B),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Only you can see these submissions. They\'re under admin review.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.white.withOpacity(0.7) : Colors.grey[700],
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+    
+    for (int i = 0; i < pending.length; i++) {
+      widgets.add(_buildContentCard(pending[i], _currentUsername, _currentEmail, i, isDark));
+    }
+    
+    return widgets;
+  }
+
+  List<Widget> _buildRejectedSection(bool isDark) {
+    // Rejected content visible ONLY to the owner
+    final currentUsernameNormalized = _currentUsername?.trim().toLowerCase() ?? '';
+    final rejected = _contributions.where((c) {
+      // Only show if logged in AND is the owner
+      final isOwner = _currentUsername != null && 
+                      _currentUsername!.isNotEmpty && 
+                      c.authorName.trim().toLowerCase() == currentUsernameNormalized;
+      return c.status == ContentStatus.rejected && isOwner;
+    }).toList();
+    
+    if (rejected.isEmpty) return [];
+    
+    final widgets = <Widget>[
+      Padding(
+        padding: const EdgeInsets.only(top: 24, bottom: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFEF4444).withOpacity(0.15),
+                border: Border.all(
+                  color: const Color(0xFFEF4444).withOpacity(0.4),
+                  width: 1,
+                ),
+              ),
+              child: const Icon(
+                Icons.close_outlined,
+                color: Color(0xFFEF4444),
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'My Rejected Submissions',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Review feedback and improve',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white.withOpacity(0.55),
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFEF4444).withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                rejected.length.toString(),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFFEF4444),
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      Container(
+        padding: const EdgeInsets.all(12),
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEF4444).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFEF4444).withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFEF4444).withOpacity(0.2),
+              ),
+              child: const Icon(
+                Icons.info_outlined,
+                size: 14,
+                color: Color(0xFFEF4444),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Only you can see these submissions. Review feedback and resubmit with improvements.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withOpacity(0.7),
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+    
+    for (int i = 0; i < rejected.length; i++) {
+      widgets.add(_buildContentCard(rejected[i], _currentUsername, _currentEmail, i, isDark));
+    }
+    
+    return widgets;
+  }
+
+  Widget _buildContentCard(UserContent content, String? currentUsername, String? currentEmail, int index, bool isDark) {
     final title = _getContentTitle(content);
     final subtitle = _getContentSubtitle(content);
     final isSelected = _selectedIndices.contains(index);
@@ -689,19 +1528,50 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
                     currentUsernameNormalized.isNotEmpty && 
                     currentUsernameNormalized == authorNameNormalized;
     
-    // Debug: print ownership check
-    print('Logged in: $isLoggedIn, Current user: "$currentUsername" → normalized: "$currentUsernameNormalized", Content author: "${content.authorName}" → normalized: "$authorNameNormalized", Is owner: $isOwner');
+    // Determine glow color based on status
+    Color glowColor = Colors.blueAccent;
+    if (content.status == ContentStatus.approved) {
+      glowColor = Colors.greenAccent;
+    } else if (content.status == ContentStatus.pending) {
+      glowColor = Colors.orangeAccent;
+    } else if (content.status == ContentStatus.rejected) {
+      glowColor = Colors.redAccent;
+    }
     
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12.0),
-      color: isSelected ? Colors.green.withOpacity(0.1) : null,
+    // Determine status color
+    Color statusColor = const Color(0xFF3B82F6); // Blue for other
+    if (content.status == ContentStatus.approved) {
+      statusColor = const Color(0xFF10B981); // Green
+    } else if (content.status == ContentStatus.pending) {
+      statusColor = const Color(0xFFF59E0B); // Orange
+    } else if (content.status == ContentStatus.rejected) {
+      statusColor = const Color(0xFFEF4444); // Red
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16.0),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: isDark ? const Color(0xFF1F2937) : Colors.white,
+        border: Border.all(
+          color: statusColor.withOpacity(0.4),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Material(
-        color: isSelected ? Colors.green.withOpacity(0.1) : Colors.transparent,
+        color: Colors.transparent,
         child: InkWell(
           onTap: _selectionMode
               ? (isOwner ? () => _toggleSelection(index) : null)
               : () => _viewContent(content),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -717,15 +1587,41 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
                         },
                       )
                     else
-                      _getTypeIcon(content.type),
-                    SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: statusColor.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: _getTypeIconGradient(content.type),
+                      ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                          SizedBox(height: 4),
-                          Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                          Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : const Color(0xFF1F2937),
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? Colors.white.withOpacity(0.55) : Colors.grey[700],
+                              letterSpacing: 0.2,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -787,41 +1683,277 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
                   ],
                 ),
                 const SizedBox(height: 12),
-                Row(
+                // Badges row
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     // Category badge
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: content.category == CourseCategory.java ? Colors.blue.withOpacity(0.1) : Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: content.category == CourseCategory.java ? Colors.blue : Colors.green),
+                        color: content.category == CourseCategory.java
+                            ? const Color(0xFF3B82F6).withOpacity(0.15)
+                            : const Color(0xFF10B981).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: content.category == CourseCategory.java
+                              ? const Color(0xFF3B82F6).withOpacity(0.4)
+                              : const Color(0xFF10B981).withOpacity(0.4),
+                          width: 1,
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(content.category == CourseCategory.java ? Icons.code : Icons.storage, size: 14, color: content.category == CourseCategory.java ? Colors.blue : Colors.green),
+                          Icon(
+                            content.category == CourseCategory.java ? Icons.code : Icons.storage,
+                            size: 14,
+                            color: content.category == CourseCategory.java
+                                ? const Color(0xFF3B82F6)
+                                : const Color(0xFF10B981),
+                          ),
                           const SizedBox(width: 4),
-                          Text(content.category == CourseCategory.java ? 'Java' : 'DBMS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: content.category == CourseCategory.java ? Colors.blue : Colors.green)),
+                          Text(
+                            content.category == CourseCategory.java ? 'Java' : 'DBMS',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: content.category == CourseCategory.java
+                                  ? const Color(0xFF3B82F6)
+                                  : const Color(0xFF10B981),
+                              letterSpacing: 0.2,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Icon(Icons.person, size: 16, color: Colors.blue),
-                    const SizedBox(width: 4),
-                    Text('By ${content.authorEmail}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.blue)),
-                    const SizedBox(width: 16),
-                    const Icon(Icons.access_time, size: 16),
-                    const SizedBox(width: 4),
-                    Text(_formatDate(content.createdAt), style: const TextStyle(fontSize: 12)),
+                    // Status badge
+                    _buildStatusBadge(content.status),
                   ],
                 ),
+                const SizedBox(height: 12),
+                // Author and date row with subtle icons
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 8,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.08),
+                            border: Border.all(
+                              color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.15),
+                              width: 1,
+                            ),
+                          ),
+                          child: Icon(Icons.person, size: 12, color: isDark ? Colors.white : Colors.grey[700]),
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            'By ${content.authorEmail}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? Colors.white.withOpacity(0.55) : Colors.grey[700],
+                              letterSpacing: 0.2,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.08),
+                            border: Border.all(
+                              color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.15),
+                              width: 1,
+                            ),
+                          ),
+                          child: Icon(Icons.access_time, size: 12, color: isDark ? Colors.white : Colors.grey[700]),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _formatDate(content.createdAt),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Colors.white.withOpacity(0.55) : Colors.grey[700],
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                // Show rejection reason if content is rejected and has a reason
+                if (content.status == ContentStatus.rejected && content.rejectionReason != null && content.rejectionReason!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.red.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: Colors.red.shade700,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Rejection Reason:',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.red.shade700,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                content.rejectionReason!,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? Colors.red.shade300 : Colors.red.shade900,
+                                  letterSpacing: 0.2,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildStatusBadge(ContentStatus status) {
+    if (status == ContentStatus.pending) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF59E0B).withOpacity(0.15),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: const Color(0xFFF59E0B).withOpacity(0.4),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.pending_outlined, size: 13, color: Color(0xFFF59E0B)),
+            const SizedBox(width: 4),
+            const Text(
+              'Pending',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFF59E0B),
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (status == ContentStatus.approved) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF10B981).withOpacity(0.15),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: const Color(0xFF10B981).withOpacity(0.4),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.verified_outlined, size: 13, color: Color(0xFF10B981)),
+            const SizedBox(width: 4),
+            const Text(
+              'Approved',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF10B981),
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEF4444).withOpacity(0.15),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: const Color(0xFFEF4444).withOpacity(0.4),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.close_outlined, size: 13, color: Color(0xFFEF4444)),
+            const SizedBox(width: 4),
+            const Text(
+              'Rejected',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFEF4444),
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Icon _getTypeIconGradient(ContentType type) {
+    switch (type) {
+      case ContentType.topic:
+        return const Icon(Icons.article, color: Colors.white);
+      case ContentType.quiz:
+        return const Icon(Icons.quiz, color: Colors.white);
+      case ContentType.fillBlank:
+        return const Icon(Icons.edit_note, color: Colors.white);
+      case ContentType.codeExample:
+        return const Icon(Icons.code, color: Colors.white);
+    }
   }
 
   Icon _getTypeIcon(ContentType type) {
@@ -851,30 +1983,86 @@ class _CommunityContributionsScreenState extends State<CommunityContributionsScr
   }
 
   String _getContentTitle(UserContent content) {
+    // Robust extraction: handle Map, nested 'content', or stringified JSON
+    dynamic raw = content.content;
+    Map<String, dynamic>? map;
+
+    if (raw is String) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) map = Map<String, dynamic>.from(decoded);
+      } catch (_) {
+        // not JSON
+      }
+    } else if (raw is Map) {
+      map = Map<String, dynamic>.from(raw);
+    }
+
+    // If map itself contains a nested 'content' object, prefer that
+    if (map != null && map['content'] is Map) {
+      map = Map<String, dynamic>.from(map['content'] as Map);
+    }
+
+    // Try common keys depending on type
     switch (content.type) {
       case ContentType.topic:
-        return content.content['title'] as String? ?? 'Untitled Topic';
+        final result = (map != null && (map['title'] as String?)?.isNotEmpty == true)
+            ? (map['title'] as String)
+            : 'Untitled Topic';
+        return result;
       case ContentType.quiz:
-        return content.content['topicTitle'] as String? ?? 'Quiz';
+        final result = (map != null && (map['topicTitle'] as String?)?.isNotEmpty == true)
+            ? (map['topicTitle'] as String)
+            : 'Quiz';
+        return result;
       case ContentType.fillBlank:
-        return content.content['topicTitle'] as String? ?? 'Fill in the Blanks';
+        final result = (map != null && (map['topicTitle'] as String?)?.isNotEmpty == true)
+            ? (map['topicTitle'] as String)
+            : 'Fill in the Blanks';
+        return result;
       case ContentType.codeExample:
-        return content.content['title'] as String? ?? 'Code Example';
+        final result = (map != null && (map['title'] as String?)?.isNotEmpty == true)
+            ? (map['title'] as String)
+            : 'Code Example';
+        return result;
     }
   }
 
   String _getContentSubtitle(UserContent content) {
+    // Robust extraction for subtitle metadata
+    dynamic raw = content.content;
+    Map<String, dynamic>? map;
+
+    if (raw is String) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) map = Map<String, dynamic>.from(decoded);
+      } catch (_) {}
+    } else if (raw is Map) {
+      map = Map<String, dynamic>.from(raw);
+    }
+
+    if (map != null && map['content'] is Map) {
+      map = Map<String, dynamic>.from(map['content'] as Map);
+    }
+
     switch (content.type) {
       case ContentType.topic:
+        // Use short excerpt of explanation if available
+        final explanation = (map != null) ? (map['explanation'] as String? ?? '') : '';
+        if (explanation.isNotEmpty) {
+          final singleLine = explanation.replaceAll(RegExp(r"\s+"), ' ').trim();
+          return singleLine.length > 80 ? '${singleLine.substring(0, 77)}...' : singleLine;
+        }
         return 'Learning Topic';
       case ContentType.quiz:
-        final questions = content.content['questions'] as List?;
-        return '${questions?.length ?? 0} questions';
       case ContentType.fillBlank:
-        final questions = content.content['questions'] as List?;
+        final questions = (map != null) ? (map['questions'] as List?) : null;
         return '${questions?.length ?? 0} questions';
       case ContentType.codeExample:
-        return content.content['language'] as String? ?? 'Code';
+        return (map != null && (map['language'] as String?)?.isNotEmpty == true)
+            ? (map['language'] as String)
+            : 'Code';
     }
   }
 
@@ -1305,7 +2493,7 @@ class ContentDetailScreen extends StatelessWidget {
               ),
             ),
           );
-        }),
+        }).toList(),
       ],
     );
   }

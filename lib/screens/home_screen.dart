@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
+import '../widgets/enhanced_ui_components.dart';
+import '../utils/animations.dart';
 import '../data/course_content.dart';
 import '../models/course.dart';
 import '../services/local_storage.dart';
@@ -519,47 +521,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                   child: Column(
                     children: [
-                      // Challenge button
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(30),
-                          gradient: LinearGradient(
-                            colors: [colors.primary, colors.secondary],
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                          ),
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(30),
-                            onTap: () => _handleDailyChallengePress(randomTopic),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 18),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.flash_on, color: Colors.white),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'Daily Challenge',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Icon(
-                                    _isDailyChallengeExpanded ? Icons.expand_less : Icons.expand_more,
-                                    color: Colors.white,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
+                      // Challenge button with enhanced gradient
+                      GradientButton(
+                        text: 'Daily Challenge',
+                        icon: Icons.flash_on,
+                        onPressed: () => _handleDailyChallengePress(randomTopic),
+                        gradientColors: [colors.primary, colors.secondary],
                       ),
                       
                       // Expanded content
@@ -827,32 +794,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           opacity: _contentFadeAnimation,
                           child: Column(
                             children: [
-                              // Motivational quote
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                margin: const EdgeInsets.symmetric(horizontal: 20),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.shade50,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.amber.shade200, width: 1),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.lightbulb_outline, color: Colors.amber.shade700, size: 20),
-                                    const SizedBox(width: 8),
-                                    Flexible(
-                                      child: Text(
-                                        _selectedQuote,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontStyle: FontStyle.italic,
-                                          color: Colors.black87,
+                              // Motivational quote with glassmorphism
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                child: GlassmorphicCard(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        PulsingIcon(
+                                          icon: Icons.lightbulb,
+                                          color: Colors.amber,
+                                          size: 24,
                                         ),
-                                        textAlign: TextAlign.center,
-                                      ),
+                                        const SizedBox(width: 12),
+                                        Flexible(
+                                          child: Text(
+                                            _selectedQuote,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontStyle: FontStyle.italic,
+                                              color: isDark ? Colors.white : Colors.black87,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ),
                               
