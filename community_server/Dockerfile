@@ -1,9 +1,9 @@
 # Use official Dart runtime as base image (stable version)
 FROM dart:stable
 
-# Install SQLite3 library
+# Install SQLite3 library (both runtime and dev packages for dynamic linking)
 RUN apt-get update && \
-    apt-get install -y libsqlite3-0 && \
+    apt-get install -y libsqlite3-0 libsqlite3-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Set working directory
