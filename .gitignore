@@ -71,3 +71,22 @@ community_server/user_check.txt
 community_server/email_list.txt
 community_server/users.json
 community_server/contributions.json
+
+# Android signing keys (NEVER COMMIT - Security critical!)
+*.jks
+*.keystore
+key.properties
+android/key.properties
+android/app/upload-keystore.jks
+android/app/*.jks
+android/app/*.keystore
+
+# Build outputs
+build/
+android/app/build/
+android/app/outputs/
+ios/build/
+
+# Debug symbols
+**/symbols/
+app.*.symbols

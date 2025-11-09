@@ -15,10 +15,14 @@ import 'utils/app_theme.dart';
 import 'widgets/theme_toggle_button.dart';
 import 'services/auth_service.dart';
 import 'models/user.dart';
+import 'utils/error_handler.dart';
 
 Future<void> main() async {
   // Initialize Flutter binding
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize global error handler for production
+  GlobalErrorHandler.initialize();
   
   // Load environment variables asynchronously without blocking startup
   dotenv.load(fileName: '.env').catchError((e) {
@@ -28,9 +32,11 @@ Future<void> main() async {
   
   // Start app immediately without waiting for .env
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => ThemeProvider(),
-      child: const LearnEaseApp(),
+    GlobalErrorHandler.errorBoundary(
+      ChangeNotifierProvider(
+        create: (context) => ThemeProvider(),
+        child: const LearnEaseApp(),
+      ),
     ),
   );
 }
