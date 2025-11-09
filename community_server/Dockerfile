@@ -1,6 +1,11 @@
 # Use official Dart runtime as base image (stable version)
 FROM dart:stable
 
+# Install SQLite3 library
+RUN apt-get update && \
+    apt-get install -y libsqlite3-0 && \
+    rm -rf /var/lib/apt/lists/*
+
 # Set working directory
 WORKDIR /app
 

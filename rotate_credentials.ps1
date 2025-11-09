@@ -45,7 +45,7 @@ $smtpPassword = Read-Host "   Enter your NEW Gmail app password (16 chars)"
 Write-Host ""
 
 # Get Gmail address
-$smtpUser = Read-Host "   Enter your Gmail address (e.g., your-email@gmail.com)"
+$smtpUser = Read-Host "   Enter your Gmail address (e.g. your-email@gmail.com)"
 Write-Host ""
 
 # Get MongoDB username
@@ -53,7 +53,7 @@ $mongoUser = Read-Host "   Enter your MongoDB username (usually same as email pr
 Write-Host ""
 
 # Get MongoDB cluster URL
-Write-Host "   MongoDB cluster URL (e.g., cluster0.sufzx.mongodb.net):" -ForegroundColor Yellow
+Write-Host "   MongoDB cluster URL (e.g. cluster0.sufzx.mongodb.net):" -ForegroundColor Yellow
 $mongoCluster = Read-Host "   "
 Write-Host ""
 
@@ -83,7 +83,7 @@ if (Test-Path $envPath) {
     
     # Write updated .env
     Set-Content -Path $envPath -Value $envContent
-    Write-Host "   ✅ .env file updated!" -ForegroundColor Green
+    Write-Host "   [OK] .env file updated!" -ForegroundColor Green
 } else {
     Write-Host "   ⚠️  .env file not found. Creating from template..." -ForegroundColor Yellow
     
@@ -107,7 +107,7 @@ MONGODB_URI=$mongoUri
 "@
     
     Set-Content -Path $envPath -Value $newEnv
-    Write-Host "   ✅ Created new .env file!" -ForegroundColor Green
+    Write-Host "   [OK] Created new .env file!" -ForegroundColor Green
 }
 
 Write-Host ""
@@ -133,15 +133,15 @@ Write-Host "      Go to: https://github.com/sathvik7137/learnease-community-plat
 Write-Host "      Scroll to 'Danger Zone' → Click 'Change visibility' → Make Private" -ForegroundColor White
 Write-Host ""
 
-Write-Host "✅ LOCAL CREDENTIALS ROTATED!" -ForegroundColor Green
+Write-Host "[SUCCESS] LOCAL CREDENTIALS ROTATED!" -ForegroundColor Green
 Write-Host ""
-Write-Host "📋 NEXT STEPS:" -ForegroundColor Yellow
+Write-Host "[NEXT STEPS]:" -ForegroundColor Yellow
 Write-Host "   1. Update Render environment variables (see above)" -ForegroundColor White
 Write-Host "   2. Make repository private (see above)" -ForegroundColor White
 Write-Host "   3. Test your local server: cd community_server; dart run bin/server.dart" -ForegroundColor White
 Write-Host "   4. Verify old credentials don't work anymore" -ForegroundColor White
 Write-Host ""
-Write-Host "🔒 Your application is now secure with NEW credentials!" -ForegroundColor Green
+Write-Host "[SECURE] Your application is now secure with NEW credentials!" -ForegroundColor Green
 Write-Host ""
 
 # Ask if user wants to test local server
