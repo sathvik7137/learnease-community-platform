@@ -1,0 +1,66 @@
+# Git
+.git
+.gitignore
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+build/
+.dart_tool/
+.packages
+
+# Database files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+users.db
+
+# Logs
+*.log
+server.log
+reset_otp_debug.log
+
+# Test files
+*_test.dart
+test_*.dart
+*_test.txt
+test_output.txt
+user_check.txt
+email_list.txt
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Documentation
+README.md
+*.md
+!IMPORTANT.md
+
+# Test/Debug scripts
+check_*.dart
+debug_*.dart
+diagnose_*.dart
+create_*.dart
+delete_*.dart
+insert_*.dart
+reset_*.dart
+setup_*.dart
+verify_*.dart
+find_*.dart
+list_*.dart
+quick_*.dart
+final_*.dart
+bcrypt_test.dart
+email_signup_test.dart
+forgot_password_test.dart
+login_test*.dart
+signup_*.dart
+test_*.dart

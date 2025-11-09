@@ -59,6 +59,11 @@ app.*.map.json
 .env.local
 .env.*.local
 .env.production
+community_server/.env
+**/. env
+**/*.env
+!.env.example
+!**/.env.example
 
 # Logs
 *.log

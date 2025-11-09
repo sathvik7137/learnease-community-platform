@@ -1,11 +1,12 @@
-# Use official Dart runtime as base image
-FROM google/dart:latest
+# Use official Dart runtime as base image (stable version)
+FROM dart:stable
 
 # Set working directory
 WORKDIR /app
 
-# Copy pubspec files
-COPY pubspec.yaml pubspec.lock ./
+# Copy pubspec files first
+COPY pubspec.yaml ./
+COPY pubspec.lock* ./
 
 # Get dependencies
 RUN dart pub get

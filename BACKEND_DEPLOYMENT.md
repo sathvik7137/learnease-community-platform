@@ -324,7 +324,7 @@ MONGODB_URI=mongodb+srv://learnease_user:yourpassword@cluster0.xxxxx.mongodb.net
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=your-email@gmail.com
-SMTP_PASS=xxxx xxxx xxxx xxxx (16-char app password)
+SMTP_PASS=YOUR_16CHAR_APP_PASSWORD
 ```
 
 ---
@@ -347,8 +347,8 @@ curl -X POST https://yourapp.railway.app/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "test@example.com",
-    "password": "Test123456",
-    "username": "testuser"
+    "password": "YourTestPassword123",
+    "username": "yourtestuser"
   }'
 ```
 

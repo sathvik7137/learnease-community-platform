@@ -1,0 +1,55 @@
+# GitGuardian Ignore File
+# This file tells ggshield which files/paths to ignore during secret scanning
+
+# Template files (not real secrets)
+**/.env.example
+**/*.example
+**/*.template
+**/.env.template
+
+# Documentation files with example credentials
+BACKEND_DEPLOYMENT.md
+START_HERE.md
+README.md
+DEPLOYMENT.md
+
+# Test files with dummy data
+**/test_*.dart
+**/*_test.dart
+**/test_*.txt
+FIX_COMPLETE.txt
+
+# Debug and temporary files
+**/debug_*.dart
+**/check_*.dart
+**/quick_*.dart
+**/setup_*.dart
+**/create_*.dart
+**/insert_*.dart
+**/delete_*.dart
+**/reset_*.dart
+**/diagnose_*.dart
+**/verify_*.dart
+**/find_*.dart
+**/list_*.dart
+
+# Specific test/debug files
+community_server/bcrypt_test.dart
+community_server/email_signup_test.dart
+community_server/final_auth_test.dart
+community_server/final_check.dart
+community_server/final_verify.dart
+community_server/forgot_password_test.dart
+community_server/login_test.dart
+community_server/login_test2.dart
+community_server/login_test_main.dart
+community_server/signup_flow_test.dart
+community_server/signup_otp_test.dart
+community_server/test_*.dart
+
+# Backup and output files
+*.log
+*.txt
+*.json
+!package.json
+!pubspec.json

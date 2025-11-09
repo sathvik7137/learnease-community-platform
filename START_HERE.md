@@ -37,13 +37,13 @@
 7. Click "Advanced" > "Add Environment Variable"
    Add these one by one:
 
-   MONGODB_URI = mongodb+srv://username:password@cluster.mongodb.net/learnease
+   MONGODB_URI = mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/learnease
    PORT = 8080
-   JWT_SECRET = super-secret-key-min-32-chars-here
+   JWT_SECRET = YOUR_SUPER_SECRET_JWT_KEY_MIN_32_CHARACTERS
    SMTP_HOST = smtp.gmail.com
    SMTP_PORT = 587
    SMTP_USER = your-email@gmail.com
-   SMTP_PASS = your-gmail-app-password
+   SMTP_PASS = YOUR_16CHAR_GMAIL_APP_PASSWORD
 
 8. Click "Create Web Service"
 9. Wait 10 minutes for deployment
@@ -79,7 +79,7 @@ fly secrets set SMTP_PASS="your-app-password"
 1. Go to: https://mongodb.com/cloud/atlas
 2. Sign up free
 3. Create cluster (M0 Free tier)
-4. Add user: learnease_user with password
+4. Add database user with username and password
 5. Network Access > Allow 0.0.0.0/0
 6. Get connection string
 7. Add to Railway variables
