@@ -17,30 +17,61 @@
 
 ## 🔴 DO THIS NOW (30 minutes)
 
-### STEP 1: Deploy Backend (15 minutes)
+### STEP 1: Deploy Backend (10 minutes)
 **You CANNOT launch without this!**
 
+**🆓 OPTION A: Render.com (100% FREE - NO CREDIT CARD!)** ⭐ RECOMMENDED
+
 ```
-1. Open browser: https://railway.app
-2. Sign in with GitHub
-3. Click "New Project"
-4. Select "Deploy from GitHub repo"
-5. Choose: sathvik7137/learnease-community-platform
-6. Set Root Directory: community_server
-7. Click "Add Variables" and paste:
+1. Open browser: https://render.com
+2. Click "Get Started for Free"
+3. Sign in with GitHub
+4. Click "New +" > "Web Service"
+5. Connect repo: sathvik7137/learnease-community-platform
+6. Configure:
+   - Name: learnease-backend
+   - Root Directory: community_server
+   - Runtime: Docker
+   - Instance Type: Free
 
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/learnease
-PORT=8080
-JWT_SECRET=super-secret-key-min-32-chars-here
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-gmail-app-password
+7. Click "Advanced" > "Add Environment Variable"
+   Add these one by one:
 
-8. Click "Deploy"
-9. Wait 5 minutes for deployment
-10. Click "Settings" > "Generate Domain"
-11. COPY THE URL: https://yourapp.railway.app
+   MONGODB_URI = mongodb+srv://username:password@cluster.mongodb.net/learnease
+   PORT = 8080
+   JWT_SECRET = super-secret-key-min-32-chars-here
+   SMTP_HOST = smtp.gmail.com
+   SMTP_PORT = 587
+   SMTP_USER = your-email@gmail.com
+   SMTP_PASS = your-gmail-app-password
+
+8. Click "Create Web Service"
+9. Wait 10 minutes for deployment
+10. COPY THE URL: https://learnease-backend.onrender.com
+```
+
+**🆓 OPTION B: Fly.io (100% FREE - 3 VMs)** - CLI Method
+
+```powershell
+# Install Fly CLI (run in PowerShell)
+iwr https://fly.io/install.ps1 -useb | iex
+
+# Sign up (NO CREDIT CARD!)
+fly auth signup
+
+# Deploy
+cd "C:\Users\CyberBot\Desktop\Projects\Intermediate -Flutter\community_server"
+fly launch --name learnease-backend
+
+# Set environment variables
+fly secrets set MONGODB_URI="your-mongodb-uri"
+fly secrets set JWT_SECRET="your-secret"
+fly secrets set SMTP_HOST="smtp.gmail.com"
+fly secrets set SMTP_PORT="587"
+fly secrets set SMTP_USER="your-email@gmail.com"
+fly secrets set SMTP_PASS="your-app-password"
+
+# Your URL: https://learnease-backend.fly.dev
 ```
 
 **Don't have MongoDB yet?**
@@ -63,9 +94,13 @@ Find this line:
 static const String _productionBaseUrl = 'https://api.learnease.com';
 ```
 
-Replace with YOUR Railway URL:
+Replace with YOUR deployment URL:
 ```dart
-static const String _productionBaseUrl = 'https://yourapp.railway.app';
+// If you used Render:
+static const String _productionBaseUrl = 'https://learnease-backend.onrender.com';
+
+// OR if you used Fly.io:
+static const String _productionBaseUrl = 'https://learnease-backend.fly.dev';
 ```
 
 Save the file!
@@ -169,10 +204,10 @@ flutter doctor
 
 ### "Can't connect to backend"
 ```
-1. Check Railway deployment is running
-2. Test URL in browser: https://yourapp.railway.app/health
+1. Check your deployment is running (Render/Fly.io dashboard)
+2. Test URL in browser: https://your-backend-url/health
 3. Should see: {"status":"OK"}
-4. If not, check Railway logs
+4. If not, check logs in your hosting dashboard
 ```
 
 ### "MongoDB connection failed"
@@ -180,7 +215,7 @@ flutter doctor
 1. Go to MongoDB Atlas
 2. Network Access > Add IP > Allow 0.0.0.0/0
 3. Check connection string is correct
-4. Restart Railway deployment
+4. Restart your deployment (Render/Fly.io)
 ```
 
 ---
@@ -189,10 +224,11 @@ flutter doctor
 
 **Read These Files:**
 - `PLAY_STORE_CHECKLIST.md` - Complete 7-day roadmap
-- `BACKEND_DEPLOYMENT.md` - Detailed backend setup
+- `BACKEND_DEPLOYMENT.md` - Detailed backend setup (FREE options!)
 
 **Can't figure something out?**
-- Railway Support: https://railway.app/help
+- Render Support: https://render.com/docs
+- Fly.io Docs: https://fly.io/docs
 - MongoDB Docs: https://mongodb.com/docs
 - Flutter Build Issues: https://docs.flutter.dev/deployment/android
 
@@ -202,13 +238,13 @@ flutter doctor
 
 | Task | Time | Status |
 |------|------|--------|
-| Deploy backend to Railway | 15 min | ⏳ TODO |
+| Deploy backend (Render/Fly.io) | 10 min | ⏳ TODO |
 | Setup MongoDB Atlas | 10 min | ⏳ TODO |
 | Update api_config.dart | 2 min | ⏳ TODO |
 | Create signing key | 5 min | ⏳ TODO |
 | Build APK/Bundle | 5 min | ⏳ TODO |
 | Test on device | 10 min | ⏳ TODO |
-| **TOTAL TODAY** | **~1 hour** | |
+| **TOTAL TODAY** | **~45 min** | |
 | | | |
 | Create app assets | 2 hrs | Tomorrow |
 | Setup Play Console | 1 hr | Tomorrow |
@@ -224,8 +260,8 @@ flutter doctor
 
 **DO THIS IN ORDER:**
 
-1. ✅ Deploy backend to Railway (15 min) - CRITICAL!
-2. ✅ Update api_config.dart with Railway URL (2 min)
+1. ✅ Deploy backend to Render or Fly.io (10 min) - CRITICAL! 100% FREE!
+2. ✅ Update api_config.dart with your backend URL (2 min)
 3. ✅ Create signing key (5 min)
 4. ✅ Build APK with .\build_release.ps1 (5 min)
 5. ✅ Test on real device (10 min)
@@ -239,6 +275,8 @@ Tomorrow you'll just need to:
 
 ---
 
-**Start with Railway deployment RIGHT NOW! That's the most critical part.**
+**Start with Render or Fly.io deployment RIGHT NOW! That's the most critical part.**
+
+🆓 **Both are 100% FREE - No credit card required!**
 
 Good luck! 🚀
