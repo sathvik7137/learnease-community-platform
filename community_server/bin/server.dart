@@ -358,7 +358,28 @@ Map<String, dynamic>? _dbGetUserByPhone(String phone) {
   };
 }
 
-Map<String, dynamic>? _dbGetUserById(String id) {
+Future<Map<String, dynamic>?> _dbGetUserById(String id) async {
+  // Try MongoDB first (production)
+  if (mongoUsersCollection != null) {
+    try {
+      final mongoUser = await mongoUsersCollection!.findOne(where.eq('id', id));
+      if (mongoUser != null) {
+        return {
+          'id': mongoUser['id'] as String?,
+          'email': mongoUser['email'] as String?,
+          'passwordHash': mongoUser['passwordHash'] as String?,
+          'phone': mongoUser['phone'] as String?,
+          'googleId': mongoUser['googleId'] as String?,
+          'createdAt': mongoUser['createdAt'] as String?,
+          'username': mongoUser['username'] as String?,
+        };
+      }
+    } catch (e) {
+      print('[MongoDB] Error fetching user by ID: $e');
+    }
+  }
+  
+  // Fall back to SQLite (local development)
   if (!dbAvailable) {
     try {
       return usersCache.firstWhere((u) => u['id'] == id);
@@ -750,7 +771,7 @@ void main(List<String> args) async {
         return Response(400, body: jsonEncode({'error': 'Invalid email or password (min 6 chars)'}), headers: {'Content-Type': 'application/json'});
       }
 
-      final existing = _dbGetUserByEmail(email);
+      final existing = await _dbGetUserByEmail(email);
       if (existing != null) {
         return Response(409, body: jsonEncode({'error': 'Email already registered'}), headers: {'Content-Type': 'application/json'});
       }
@@ -782,7 +803,7 @@ void main(List<String> args) async {
         return Response(400, body: jsonEncode({'error': 'Missing credentials'}), headers: {'Content-Type': 'application/json'});
       }
 
-      final user = _dbGetUserByEmail(email);
+      final user = await _dbGetUserByEmail(email);
       if (user == null) {
         print('❌ [LOGIN] User not found for email: $email');
         return Response(401, body: jsonEncode({'error': 'Invalid credentials'}), headers: {'Content-Type': 'application/json'});
@@ -837,7 +858,7 @@ void main(List<String> args) async {
       }
 
       // Verify user credentials
-      final user = _dbGetUserByEmail(email);
+      final user = await _dbGetUserByEmail(email);
       if (user == null) {
         print('❌ [ADMIN_LOGIN] User not found for email: $email');
         return Response(401, body: jsonEncode({'error': 'Invalid credentials'}), headers: {'Content-Type': 'application/json'});
@@ -904,7 +925,7 @@ void main(List<String> args) async {
       }
 
       // Verify user exists
-      final user = _dbGetUserByEmail(email);
+      final user = await _dbGetUserByEmail(email);
       if (user == null) {
         print('❌ [ADMIN_RESET] User not found for email: $email');
         return Response(401, body: jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});
@@ -1146,7 +1167,7 @@ void main(List<String> args) async {
       if (email == null || !email.contains('@')) return Response(400, body: jsonEncode({'error': 'Invalid email'}), headers: {'Content-Type': 'application/json'});
       
       // Check if user already exists
-      final user = _dbGetUserByEmail(email);
+      final user = await _dbGetUserByEmail(email);
       if (user != null) {
         print('[SIGNUP OTP] ❌ Email already registered: $email');
         return Response(409, body: jsonEncode({'error': 'Email already registered', 'sent': false}), headers: {'Content-Type': 'application/json'});
@@ -1200,7 +1221,7 @@ void main(List<String> args) async {
         return Response(401, body: jsonEncode({'error': 'Invalid code'}), headers: {'Content-Type': 'application/json'});
       }
       // OTP valid, update password
-      final user = _dbGetUserByEmail(email);
+      final user = await _dbGetUserByEmail(email);
       if (user == null) return Response(404, body: jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});
       final hash = BCrypt.hashpw(newPassword, BCrypt.gensalt());
       final stmt = db.prepare('UPDATE users SET password_hash = ? WHERE id = ?;');
@@ -1290,7 +1311,7 @@ void main(List<String> args) async {
         final newId = uuid.v4();
         final createdAt = DateTime.now().toIso8601String();
         _dbInsertUser(id: newId, email: null, passwordHash: null, phone: phone, googleId: null, createdAt: createdAt);
-        user = _dbGetUserById(newId);
+        user = await _dbGetUserById(newId);
         print('👤 New user created: $newId');
       }
       // consume OTP
@@ -1351,7 +1372,7 @@ void main(List<String> args) async {
       print('[EMAIL OTP] ✅ OTP verified successfully');
       
       // Check if this is for login (user exists) or registration (user doesn't exist)
-      var user = _dbGetUserByEmail(email);
+      var user = await _dbGetUserByEmail(email);
       
       if (user != null) {
         // LOGIN: User exists, verify password
@@ -1392,7 +1413,7 @@ void main(List<String> args) async {
           username: defaultUsername
         );
         
-        user = _dbGetUserById(newId);
+        user = await _dbGetUserById(newId);
         print('[EMAIL OTP] 👤 New user created: $newId with username: $defaultUsername');
       }
       
@@ -1437,17 +1458,17 @@ void main(List<String> args) async {
       final googleId = decoded['sub'] as String?;
       if (email == null || googleId == null) return Response(400, body: jsonEncode({'error': 'Invalid token payload'}), headers: {'Content-Type': 'application/json'});
       // find or create user by email
-      var user = _dbGetUserByEmail(email);
+      var user = await _dbGetUserByEmail(email);
       if (user == null) {
         final newId = uuid.v4();
         final createdAt = DateTime.now().toIso8601String();
         _dbInsertUser(id: newId, email: email, passwordHash: null, phone: null, googleId: googleId, createdAt: createdAt);
-        user = _dbGetUserById(newId);
+        user = await _dbGetUserById(newId);
       } else {
         // ensure google id is stored/updated
   final found = user;
   _dbUpdateGoogleId(found['id'] as String, googleId);
-  user = _dbGetUserById(found['id'] as String);
+  user = await _dbGetUserById(found['id'] as String);
       }
       final tokens = _issueTokens(user!['id'] as String, email);
       return Response.ok(jsonEncode({'token': tokens['accessToken'], 'refreshToken': tokens['refreshToken'], 'user': {'id': user['id'], 'email': user['email']}}), headers: {'Content-Type': 'application/json'});
@@ -1471,7 +1492,7 @@ void main(List<String> args) async {
       if (DateTime.now().isAfter(expiresAt)) return Response(401, body: jsonEncode({'error': 'Refresh token expired'}), headers: {'Content-Type': 'application/json'});
       
       final userId = session['userId'] as String;
-      final user = _dbGetUserById(userId);
+      final user = await _dbGetUserById(userId);
       if (user == null) return Response(401, body: jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});
       
       // Check if user is an admin (has admin passkey)
@@ -1515,7 +1536,7 @@ void main(List<String> args) async {
         return Response(401, body: jsonEncode({'error': 'Invalid or expired token'}), headers: {'Content-Type': 'application/json'});
       }
       
-      final user = _dbGetUserById(userId);
+      final user = await _dbGetUserById(userId);
       if (user == null) {
         return Response(404, body: jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});
       }
@@ -1695,7 +1716,7 @@ void main(List<String> args) async {
         return Response.unauthorized(jsonEncode({'error': 'Invalid or expired token'}), headers: {'Content-Type': 'application/json'});
       }
       
-      final user = _dbGetUserById(userId);
+      final user = await _dbGetUserById(userId);
       if (user == null) {
         return Response.forbidden(jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});
       }
@@ -1804,7 +1825,7 @@ void main(List<String> args) async {
         return Response.unauthorized(jsonEncode({'error': 'Invalid or expired token'}), headers: {'Content-Type': 'application/json'});
       }
       
-      final user = _dbGetUserById(userId);
+      final user = await _dbGetUserById(userId);
       if (user == null) {
         return Response.forbidden(jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});
       }
@@ -2428,7 +2449,7 @@ void main(List<String> args) async {
       if (userId == null) {
         return Response.unauthorized(jsonEncode({'error': 'Invalid or expired token'}), headers: {'Content-Type': 'application/json'});
       }
-      final user = _dbGetUserById(userId);
+      final user = await _dbGetUserById(userId);
       if (user == null) {
         return Response.forbidden(jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});
       }
@@ -2939,7 +2960,7 @@ void main(List<String> args) async {
       final email = (data['email'] as String?)?.trim().toLowerCase();
       if (email == null || !email.contains('@')) return Response(400, body: jsonEncode({'error': 'Invalid email'}), headers: {'Content-Type': 'application/json'});
       
-      final user = _dbGetUserByEmail(email);
+      final user = await _dbGetUserByEmail(email);
       if (user == null) {
         // Return clear error for password reset when email not found
         File('reset_otp_debug.log').writeAsStringSync('[RESET OTP] Email not registered: $email\n', mode: FileMode.append);
@@ -2980,13 +3001,13 @@ void main(List<String> args) async {
   });
 
   // Email uniqueness check endpoint
-  router.get('/api/auth/check-email', (Request request) {
+  router.get('/api/auth/check-email', (Request request) async {
     final email = request.url.queryParameters['email']?.trim().toLowerCase();
     if (email == null || email.isEmpty) {
       return Response(400, body: jsonEncode({'error': 'Missing email'}), headers: {'Content-Type': 'application/json'});
     }
-    // Check in users table (SQLite)
-    final user = _dbGetUserByEmail(email);
+    // Check in users table (MongoDB first, then SQLite)
+    final user = await _dbGetUserByEmail(email);
     return Response.ok(jsonEncode({'taken': user != null}), headers: {'Content-Type': 'application/json'});
   });
 
@@ -3002,7 +3023,7 @@ void main(List<String> args) async {
       }
 
       // Verify user exists
-      final user = _dbGetUserByEmail(email);
+      final user = await _dbGetUserByEmail(email);
       if (user == null) {
         print('[DELETE ACCOUNT OTP] ❌ Email not registered: $email');
         return Response(401, body: jsonEncode({'error': 'No account found with this email address.', 'sent': false}), headers: {'Content-Type': 'application/json'});
@@ -3056,7 +3077,7 @@ void main(List<String> args) async {
       }
 
       // Verify user exists and matches
-      final user = _dbGetUserByEmail(email);
+      final user = await _dbGetUserByEmail(email);
       if (user == null) {
         print('[DELETE ACCOUNT] ❌ User not found: $email');
         return Response(404, body: jsonEncode({'error': 'User not found'}), headers: {'Content-Type': 'application/json'});

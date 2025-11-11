@@ -14,13 +14,15 @@ class ApiConfig {
   
   /// Get the appropriate base URL based on environment
   static String get baseUrl {
-    // In debug mode, use localhost for development
-    if (kDebugMode) {
-      return _developmentBaseUrl;
-    }
-    
-    // In release mode, use production server
+    // TEMPORARY: Always use production for testing
+    // This ensures the app connects to Render server even in debug mode
     return _productionBaseUrl;
+    
+    // ORIGINAL CODE (uncomment for local development):
+    // if (kDebugMode) {
+    //   return _developmentBaseUrl;
+    // }
+    // return _productionBaseUrl;
   }
   
   /// Alternative: Check if running on web (Firebase)
