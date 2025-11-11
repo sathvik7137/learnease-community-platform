@@ -1145,11 +1145,16 @@ void main(List<String> args) async {
       
       final subject = 'LearnEase Login OTP';
       final body_text = 'Your LearnEase login OTP is: $code\nValid for 5 minutes.';
-      final sent = await _sendEmail(email, subject, body_text);
-      print('[LOGIN OTP] Email send result: ' + (sent ? 'SUCCESS' : 'FAILURE (dev mode - check console)'));
       
-      // Always return success for OTP sending (in dev, console fallback is available)
-      return Response.ok(jsonEncode({'sent': sent, 'code': code, 'message': sent ? 'OTP sent to your email' : 'Check console for OTP'}), headers: {'Content-Type': 'application/json'});
+      // Send email asynchronously (don't block response)
+      // ignore: unawaited_futures
+      _sendEmail(email, subject, body_text).then((sent) {
+        print('[LOGIN OTP] Email send result: ' + (sent ? 'SUCCESS' : 'FAILURE (dev mode - check console)'));
+      });
+      
+      // Return immediately (OTP is saved in DB, email will send in background)
+      print('[LOGIN OTP] ✅ Returning success immediately, email sending in background');
+      return Response.ok(jsonEncode({'sent': true, 'message': 'OTP sent to your email'}), headers: {'Content-Type': 'application/json'});
     } catch (e) {
       print('[LOGIN OTP] ❌ Exception: $e');
       print('[LOGIN OTP] Stack: ${e.runtimeType}');
