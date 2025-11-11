@@ -41,7 +41,7 @@ import '../config/api_config.dart';
     }
     return {'error': 'Failed to send OTP after multiple attempts'};
   }
-    final String _base = ApiConfig.webBaseUrl;
+    final String _base = ApiConfig.baseUrl;  // Changed from webBaseUrl to baseUrl
     String? _pendingPassword;
     bool _isRefreshing = false;
     final List<void Function(String?)> _refreshCallbacks = [];

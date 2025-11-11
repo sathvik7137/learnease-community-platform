@@ -291,7 +291,29 @@ void _dbRevokeSession(String refreshToken) {
 }
 
 // User helpers (DB-backed)
-Map<String, dynamic>? _dbGetUserByEmail(String email) {
+Future<Map<String, dynamic>?> _dbGetUserByEmail(String email) async {
+  // Try MongoDB first (production)
+  if (mongoUsersCollection != null) {
+    try {
+      final mongoUser = await mongoUsersCollection!.findOne(where.eq('email', email));
+      if (mongoUser != null) {
+        return {
+          'id': mongoUser['id'] as String?,
+          'email': mongoUser['email'] as String?,
+          'passwordHash': mongoUser['passwordHash'] as String?,
+          'phone': mongoUser['phone'] as String?,
+          'googleId': mongoUser['googleId'] as String?,
+          'createdAt': mongoUser['createdAt'] as String?,
+          'username': mongoUser['username'] as String?,
+          'admin_passkey': mongoUser['admin_passkey'] as String?,
+        };
+      }
+    } catch (e) {
+      print('[MongoDB] Error fetching user by email: $e');
+    }
+  }
+  
+  // Fall back to SQLite (local development)
   if (!dbAvailable) {
     try {
       return usersCache.firstWhere((u) => u['email'] == email);
@@ -1045,7 +1067,7 @@ void main(List<String> args) async {
       
       // Check if user exists before sending OTP (security fix)
       print('[LOGIN OTP] 🔍 Looking up user with email: "$email"');
-      final user = _dbGetUserByEmail(email);
+      final user = await _dbGetUserByEmail(email);
       if (user == null) {
         // Return error for non-existent email for login attempts
         print('[LOGIN OTP] ❌ Email not registered: $email');
