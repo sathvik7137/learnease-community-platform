@@ -756,6 +756,25 @@ void main(List<String> args) async {
     return Response.ok('Community Server is running!');
   });
 
+  // Debug endpoint to check SMTP configuration (remove in production)
+  router.get('/api/debug/email-config', (Request request) {
+    final smtpUser = Platform.environment['SMTP_USER'] ?? 
+                     _readLocalEnvTop('SMTP_USER', path: 'community_server/.env') ?? 
+                     _readLocalEnvTop('SMTP_USER', path: '.env');
+    final smtpPass = Platform.environment['SMTP_PASSWORD'] ?? 
+                     _readLocalEnvTop('SMTP_PASSWORD', path: 'community_server/.env') ?? 
+                     _readLocalEnvTop('SMTP_PASSWORD', path: '.env');
+    
+    return Response.ok(jsonEncode({
+      'smtp_user': smtpUser ?? 'NOT_SET',
+      'smtp_password_set': smtpPass != null,
+      'smtp_password_length': smtpPass?.length ?? 0,
+      'smtp_password_last_4': smtpPass != null && smtpPass.length >= 4 
+          ? smtpPass.substring(smtpPass.length - 4) 
+          : 'N/A',
+    }), headers: {'Content-Type': 'application/json'});
+  });
+
   // --- AUTH ROUTES ---
   // Register (email/password)
   router.post('/api/auth/register', (Request request) async {
