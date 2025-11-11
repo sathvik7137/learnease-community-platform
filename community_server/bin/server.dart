@@ -300,10 +300,10 @@ Future<Map<String, dynamic>?> _dbGetUserByEmail(String email) async {
         return {
           'id': mongoUser['id'] as String?,
           'email': mongoUser['email'] as String?,
-          'passwordHash': mongoUser['passwordHash'] as String?,
+          'passwordHash': mongoUser['password_hash'] as String?,  // MongoDB uses snake_case from SQLite export
           'phone': mongoUser['phone'] as String?,
-          'googleId': mongoUser['googleId'] as String?,
-          'createdAt': mongoUser['createdAt'] as String?,
+          'googleId': mongoUser['google_id'] as String?,  // Also fix snake_case
+          'createdAt': mongoUser['created_at'] as String?,  // Also fix snake_case
           'username': mongoUser['username'] as String?,
           'admin_passkey': mongoUser['admin_passkey'] as String?,
         };
@@ -367,10 +367,10 @@ Future<Map<String, dynamic>?> _dbGetUserById(String id) async {
         return {
           'id': mongoUser['id'] as String?,
           'email': mongoUser['email'] as String?,
-          'passwordHash': mongoUser['passwordHash'] as String?,
+          'passwordHash': mongoUser['password_hash'] as String?,  // MongoDB uses snake_case from SQLite export
           'phone': mongoUser['phone'] as String?,
-          'googleId': mongoUser['googleId'] as String?,
-          'createdAt': mongoUser['createdAt'] as String?,
+          'googleId': mongoUser['google_id'] as String?,  // Also fix snake_case
+          'createdAt': mongoUser['created_at'] as String?,  // Also fix snake_case
           'username': mongoUser['username'] as String?,
         };
       }
