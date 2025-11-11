@@ -3,13 +3,11 @@ import 'package:flutter/foundation.dart';
 /// API Configuration - Automatically selects correct backend URL
 /// based on environment (development, production, etc.)
 class ApiConfig {
-  // ⚠️ CRITICAL: Replace with your REAL production server URL
-  // DO NOT use ngrok in production! Options:
-  // 1. Deploy to Railway: https://railway.app
-  // 2. Deploy to Render: https://render.com
-  // 3. Deploy to DigitalOcean: https://www.digitalocean.com
-  // 4. Deploy to AWS EC2/Lightsail
-  static const String _productionBaseUrl = 'https://api.learnease.com'; // ⚠️ CHANGE THIS!
+  // ✅ Production server deployed on Render.com
+  // Backend API: https://learnease-community-platform.onrender.com
+  // MongoDB: Connected and persistent
+  // Users: 8 migrated users ready
+  static const String _productionBaseUrl = 'https://learnease-community-platform.onrender.com';
   
   // Development/Local URLs
   static const String _developmentBaseUrl = 'http://localhost:8080';
