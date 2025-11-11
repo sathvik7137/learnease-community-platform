@@ -536,7 +536,7 @@ Future<bool> _sendEmail(String to, String subject, String body) async {
           ..subject = subject
           ..html = body;
         
-        await send(message, smtpServer).timeout(const Duration(seconds: 30));
+        await send(message, smtpServer).timeout(const Duration(seconds: 10));  // Reduced from 30s to 10s
         print('✅ Email sent successfully to $to (attempt $attempt)');
         return true;
       } on MailerException catch (e) {
@@ -546,15 +546,15 @@ Future<bool> _sendEmail(String to, String subject, String body) async {
         }
         
         if (attempt < maxRetries) {
-          // Wait before retrying (exponential backoff: 3s, 6s)
-          final delaySeconds = 3 * attempt;
+          // Wait before retrying (reduced backoff: 1s, 2s)
+          final delaySeconds = 1 * attempt;
           print('[EMAIL] Retrying in ${delaySeconds}s...');
           await Future.delayed(Duration(seconds: delaySeconds));
         }
       } on TimeoutException catch (e) {
         print('[EMAIL] ❌ Attempt $attempt failed (Timeout): $e');
         if (attempt < maxRetries) {
-          final delaySeconds = 3 * attempt;
+          final delaySeconds = 1 * attempt;
           print('[EMAIL] Retrying in ${delaySeconds}s...');
           await Future.delayed(Duration(seconds: delaySeconds));
         }
