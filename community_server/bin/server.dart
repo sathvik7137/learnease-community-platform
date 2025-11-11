@@ -20,6 +20,11 @@ Db? mongoDb;
 DbCollection? contribCollection;
 DbCollection? quizResultsCollection;
 DbCollection? challengeResultsCollection;
+
+// User management collections (persistent in MongoDB)
+DbCollection? mongoUsersCollection;
+DbCollection? mongoSessionsCollection;
+DbCollection? mongoEmailOtpsCollection;
 // Simple local env reader (can be used during startup)
 String? _readLocalEnvTop(String key, {String? path}) {
   try {
@@ -563,8 +568,20 @@ void main(List<String> args) async {
     contribCollection = mongoDb?.collection('contributions');
     quizResultsCollection = mongoDb?.collection('quiz_results');
     challengeResultsCollection = mongoDb?.collection('challenge_results');
+    
+    // User management collections (persistent across deployments)
+    mongoUsersCollection = mongoDb?.collection('users');
+    mongoSessionsCollection = mongoDb?.collection('sessions');
+    mongoEmailOtpsCollection = mongoDb?.collection('email_otps');
+    
     print('✅ MongoDB connected successfully');
-    print('✅ Collections initialized: contributions, quiz_results, challenge_results');
+    print('✅ Collections initialized: contributions, quiz_results, challenge_results, users, sessions, email_otps');
+    
+    // Log user count from MongoDB
+    if (mongoUsersCollection != null) {
+      final userCount = await mongoUsersCollection!.count();
+      print('📊 MongoDB users: $userCount');
+    }
   } catch (e) {
     print('⚠️ MongoDB connection failed: $e');
     print('⚠️ Contributions feature will be unavailable. Attempting to use local cache...');
