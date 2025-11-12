@@ -1002,6 +1002,55 @@ void main(List<String> args) async {
     }
   });
 
+  // TEMPORARY: Setup admin passkey (call this from browser to set passkey)
+  // DELETE THIS ENDPOINT after setup is complete!
+  router.post('/api/admin/setup-passkey', (Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      final passkey = data['passkey'] as String?;
+      final secretKey = data['secret'] as String?;
+      
+      // Simple security: require a secret key
+      if (secretKey != 'learnease-setup-2024') {
+        return Response(403, body: jsonEncode({'error': 'Unauthorized'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      if (passkey == null || passkey.length < 6) {
+        return Response(400, body: jsonEncode({'error': 'Passkey must be at least 6 characters'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      print('🔐 [SETUP] Setting admin passkey...');
+      
+      if (mongoUsersCollection == null) {
+        return Response.internalServerError(body: jsonEncode({'error': 'MongoDB not available'}), headers: {'Content-Type': 'application/json'});
+      }
+      
+      // Hash the passkey
+      final hashedPasskey = BCrypt.hashpw(passkey, BCrypt.gensalt());
+      
+      // Update admin user
+      final result = await mongoUsersCollection!.updateOne(
+        where.eq('email', 'admin@learnease.com'),
+        modify.set('admin_passkey', hashedPasskey),
+      );
+      
+      if (result.isSuccess) {
+        print('✅ [SETUP] Admin passkey set successfully!');
+        return Response.ok(jsonEncode({
+          'success': true,
+          'message': 'Admin passkey set successfully',
+          'passkey': passkey
+        }), headers: {'Content-Type': 'application/json'});
+      } else {
+        return Response.internalServerError(body: jsonEncode({'error': 'Failed to update passkey'}), headers: {'Content-Type': 'application/json'});
+      }
+    } catch (e) {
+      print('❌ [SETUP] Exception: $e');
+      return Response.internalServerError(body: jsonEncode({'error': e.toString()}), headers: {'Content-Type': 'application/json'});
+    }
+  });
+
   // Send OTP to phone (placeholder - logs to console). In production plug Twilio or other SMS provider.
   router.post('/api/auth/send-otp', (Request request) async {
     try {
