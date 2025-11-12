@@ -1002,12 +1002,13 @@ void main(List<String> args) async {
     }
   });
 
-  // TEMPORARY: Setup admin passkey (call this from browser to set passkey)
+  // TEMPORARY: Setup admin credentials (password + passkey)
   // DELETE THIS ENDPOINT after setup is complete!
   router.post('/api/admin/setup-passkey', (Request request) async {
     try {
       final body = await request.readAsString();
       final data = jsonDecode(body) as Map<String, dynamic>;
+      final password = data['password'] as String?;
       final passkey = data['passkey'] as String?;
       final secretKey = data['secret'] as String?;
       
@@ -1016,34 +1017,44 @@ void main(List<String> args) async {
         return Response(403, body: jsonEncode({'error': 'Unauthorized'}), headers: {'Content-Type': 'application/json'});
       }
       
+      if (password == null || password.length < 6) {
+        return Response(400, body: jsonEncode({'error': 'Password must be at least 6 characters'}), headers: {'Content-Type': 'application/json'});
+      }
+      
       if (passkey == null || passkey.length < 6) {
         return Response(400, body: jsonEncode({'error': 'Passkey must be at least 6 characters'}), headers: {'Content-Type': 'application/json'});
       }
       
-      print('🔐 [SETUP] Setting admin passkey...');
+      print('🔐 [SETUP] Setting admin password and passkey...');
       
       if (mongoUsersCollection == null) {
         return Response.internalServerError(body: jsonEncode({'error': 'MongoDB not available'}), headers: {'Content-Type': 'application/json'});
       }
       
-      // Hash the passkey
+      // Hash the password and passkey
+      final hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt());
       final hashedPasskey = BCrypt.hashpw(passkey, BCrypt.gensalt());
       
-      // Update admin user
+      print('🔐 [SETUP] Hashing complete, updating MongoDB...');
+      
+      // Update admin user with both password and passkey
       final result = await mongoUsersCollection!.updateOne(
         where.eq('email', 'admin@learnease.com'),
-        modify.set('admin_passkey', hashedPasskey),
+        modify.set('password_hash', hashedPassword).set('admin_passkey', hashedPasskey),
       );
       
       if (result.isSuccess) {
-        print('✅ [SETUP] Admin passkey set successfully!');
+        print('✅ [SETUP] Admin credentials set successfully!');
+        print('   Password: $password');
+        print('   Passkey: $passkey');
         return Response.ok(jsonEncode({
           'success': true,
-          'message': 'Admin passkey set successfully',
+          'message': 'Admin credentials set successfully',
+          'password': password,
           'passkey': passkey
         }), headers: {'Content-Type': 'application/json'});
       } else {
-        return Response.internalServerError(body: jsonEncode({'error': 'Failed to update passkey'}), headers: {'Content-Type': 'application/json'});
+        return Response.internalServerError(body: jsonEncode({'error': 'Failed to update credentials'}), headers: {'Content-Type': 'application/json'});
       }
     } catch (e) {
       print('❌ [SETUP] Exception: $e');
