@@ -10,9 +10,9 @@ import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import 'package:bcrypt/bcrypt.dart';
 import 'package:uuid/uuid.dart';
 import 'package:sqlite3/sqlite3.dart';
-import 'package:mailer/mailer.dart';
-import 'package:mailer/smtp_server.dart';
 import 'package:mongo_dart/mongo_dart.dart';
+import 'package:googleapis/gmail/v1.dart' as gmail;
+import 'package:googleapis_auth/auth_io.dart' as auth;
 
 // In-memory storage (replace with database in production)
 // MongoDB connection for contributions
@@ -504,81 +504,84 @@ void _dbDeleteEmailOtp(String email) {
   }
 }
 
-// Send email via SMTP (Gmail)
+// Send email via Gmail API (HTTPS - port 443, works on Render free tier)
 Future<bool> _sendEmail(String to, String subject, String body) async {
   print('[EMAIL] Attempting to send email to: $to');
   try {
-    // Try environment variables first, then .env files in order
-    var smtpUser = Platform.environment['SMTP_USER'];
-    smtpUser ??= _readLocalEnvTop('SMTP_USER', path: 'community_server/.env');
-    smtpUser ??= _readLocalEnvTop('SMTP_USER', path: '.env');
+    // Read Gmail API credentials from environment
+    var clientId = Platform.environment['GMAIL_CLIENT_ID'];
+    clientId ??= _readLocalEnvTop('GMAIL_CLIENT_ID', path: 'community_server/.env');
+    clientId ??= _readLocalEnvTop('GMAIL_CLIENT_ID', path: '.env');
     
-    var smtpPass = Platform.environment['SMTP_PASSWORD'];
-    smtpPass ??= _readLocalEnvTop('SMTP_PASSWORD', path: 'community_server/.env');
-    smtpPass ??= _readLocalEnvTop('SMTP_PASSWORD', path: '.env');
+    var clientSecret = Platform.environment['GMAIL_CLIENT_SECRET'];
+    clientSecret ??= _readLocalEnvTop('GMAIL_CLIENT_SECRET', path: 'community_server/.env');
+    clientSecret ??= _readLocalEnvTop('GMAIL_CLIENT_SECRET', path: '.env');
     
-    print('[EMAIL] SMTP_USER: ' + (smtpUser ?? 'null'));
-    print('[EMAIL] SMTP_PASSWORD: ' + (smtpPass != null ? '***hidden***' : 'null'));
-    if (smtpUser == null || smtpPass == null) {
-      print('⚠️ Email not configured (SMTP_USER or SMTP_PASSWORD missing). OTP: Check console.');
+    var refreshToken = Platform.environment['GMAIL_REFRESH_TOKEN'];
+    refreshToken ??= _readLocalEnvTop('GMAIL_REFRESH_TOKEN', path: 'community_server/.env');
+    refreshToken ??= _readLocalEnvTop('GMAIL_REFRESH_TOKEN', path: '.env');
+    
+    var userEmail = Platform.environment['GMAIL_USER_EMAIL'];
+    userEmail ??= _readLocalEnvTop('GMAIL_USER_EMAIL', path: 'community_server/.env');
+    userEmail ??= _readLocalEnvTop('GMAIL_USER_EMAIL', path: '.env');
+    
+    print('[EMAIL] GMAIL_CLIENT_ID: ' + (clientId != null ? 'present' : 'null'));
+    print('[EMAIL] GMAIL_CLIENT_SECRET: ' + (clientSecret != null ? '***hidden***' : 'null'));
+    print('[EMAIL] GMAIL_REFRESH_TOKEN: ' + (refreshToken != null ? '***hidden***' : 'null'));
+    print('[EMAIL] GMAIL_USER_EMAIL: ' + (userEmail ?? 'null'));
+    
+    if (clientId == null || clientSecret == null || refreshToken == null || userEmail == null) {
+      print('⚠️ Gmail API not configured. Missing: GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, or GMAIL_USER_EMAIL');
       return false;
     }
     
-    // Retry logic for SMTP connection issues (Gmail SMTP can be flaky)
-    int maxRetries = 3;
-    for (int attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        print('[EMAIL] Attempt $attempt/$maxRetries to send email...');
-        
-        // Use STARTTLS on port 587 instead of SSL on port 465 (better for cloud platforms)
-        final smtpServer = SmtpServer(
-          'smtp.gmail.com',
-          port: 587,
-          username: smtpUser,
-          password: smtpPass,
-          ignoreBadCertificate: false,
-          ssl: false,
-          allowInsecure: false,
-        );
-        
-        final message = Message()
-          ..from = Address(smtpUser, 'LearnEase')
-          ..recipients.add(to)
-          ..subject = subject
-          ..text = body
-          ..html = body;
-        
-        print('[EMAIL] Connecting to smtp.gmail.com:587 with STARTTLS...');
-        await send(message, smtpServer).timeout(const Duration(seconds: 15));  // Increased timeout for STARTTLS
-        print('✅ Email sent successfully to $to (attempt $attempt)');
-        return true;
-      } on MailerException catch (e) {
-        print('[EMAIL] ❌ Attempt $attempt failed (MailerException): ${e.toString()}');
-        for (var p in e.problems) {
-          print('[EMAIL]    Problem: ${p.code}: ${p.msg}');
-        }
-        
-        if (attempt < maxRetries) {
-          // Wait before retrying (reduced backoff: 1s, 2s)
-          final delaySeconds = 1 * attempt;
-          print('[EMAIL] Retrying in ${delaySeconds}s...');
-          await Future.delayed(Duration(seconds: delaySeconds));
-        }
-      } on TimeoutException catch (e) {
-        print('[EMAIL] ❌ Attempt $attempt failed (Timeout): $e');
-        if (attempt < maxRetries) {
-          final delaySeconds = 1 * attempt;
-          print('[EMAIL] Retrying in ${delaySeconds}s...');
-          await Future.delayed(Duration(seconds: delaySeconds));
-        }
-      }
-    }
+    print('[EMAIL] Creating OAuth2 credentials with refresh token...');
     
-    // All retries exhausted
-    print('❌ Email send failed after $maxRetries attempts to $to');
-    return false;
-  } catch (e) {
-    print('❌ Email configuration error: $e');
+    // Create OAuth2 credentials with refresh token
+    final credentials = auth.AccessCredentials(
+      auth.AccessToken('Bearer', '', DateTime.now().toUtc()),
+      refreshToken,
+      ['https://www.googleapis.com/auth/gmail.send'],
+    );
+    
+    // Create authenticated HTTP client
+    final clientCredentials = auth.ClientId(clientId, clientSecret);
+    final httpClient = await auth.autoRefreshingClient(
+      clientCredentials,
+      credentials,
+      http.Client(),
+    );
+    
+    print('[EMAIL] Creating Gmail API client...');
+    final gmailApi = gmail.GmailApi(httpClient);
+    
+    // Construct RFC 2822 email message
+    final emailLines = <String>[
+      'From: LearnEase <$userEmail>',
+      'To: $to',
+      'Subject: $subject',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      body,
+    ];
+    final emailContent = emailLines.join('\r\n');
+    
+    // Base64url encode the message (Gmail API requirement)
+    final encodedMessage = base64Url.encode(utf8.encode(emailContent)).replaceAll('=', '');
+    
+    // Create Gmail message object
+    final message = gmail.Message()..raw = encodedMessage;
+    
+    print('[EMAIL] Sending email via Gmail API (HTTPS port 443)...');
+    await gmailApi.users.messages.send(message, 'me');
+    
+    print('✅ Email sent successfully via Gmail API to $to');
+    httpClient.close();
+    return true;
+    
+  } catch (e, stackTrace) {
+    print('❌ Failed to send email via Gmail API: $e');
+    print('Stack trace: $stackTrace');
     return false;
   }
 }
