@@ -899,19 +899,19 @@ void main(List<String> args) async {
         return Response(401, body: jsonEncode({'error': 'Invalid credentials'}), headers: {'Content-Type': 'application/json'});
       }
       
-      // Verify password
-      final hash = user['passwordHash'] as String?;
+      // Verify password (use snake_case for MongoDB)
+      final hash = user['password_hash'] as String?;
       if (hash == null || !BCrypt.checkpw(password, hash)) {
-        print('❌ [ADMIN_LOGIN] Password check failed for $email');
+        print('❌ [ADMIN_LOGIN] Password check failed for $email (hash present: ${hash != null})');
         return Response(401, body: jsonEncode({'error': 'Invalid credentials'}), headers: {'Content-Type': 'application/json'});
       }
       
       print('✅ [ADMIN_LOGIN] Password verified for $email');
       
-      // Verify admin passkey
+      // Verify admin passkey (use snake_case for MongoDB)
       final adminPasskeyHash = user['admin_passkey'] as String?;
       if (adminPasskeyHash == null || !BCrypt.checkpw(passkey, adminPasskeyHash)) {
-        print('❌ [ADMIN_LOGIN] Invalid passkey for $email');
+        print('❌ [ADMIN_LOGIN] Invalid passkey for $email (passkey hash present: ${adminPasskeyHash != null})');
         return Response(401, body: jsonEncode({'error': 'Invalid passkey'}), headers: {'Content-Type': 'application/json'});
       }
       
@@ -979,13 +979,17 @@ void main(List<String> args) async {
       final newPasswordHash = BCrypt.hashpw(newPassword, BCrypt.gensalt());
       print('🔐 [ADMIN_RESET] New password hashed');
       
-      // Update password in database
-      db.execute(
-        'UPDATE users SET password_hash = ? WHERE email = ?',
-        [newPasswordHash, email]
-      );
-      
-      print('✅ [ADMIN_RESET] Password updated for $email');
+      // Update password in MongoDB
+      if (mongoUsersCollection != null) {
+        await mongoUsersCollection!.updateOne(
+          where.eq('email', email),
+          modify.set('password_hash', newPasswordHash)
+        );
+        print('✅ [ADMIN_RESET] Password updated in MongoDB for $email');
+      } else {
+        print('❌ [ADMIN_RESET] MongoDB not available');
+        return Response.internalServerError(body: jsonEncode({'error': 'Database not available'}), headers: {'Content-Type': 'application/json'});
+      }
       
       return Response.ok(jsonEncode({
         'success': true,
