@@ -2309,34 +2309,140 @@ void main(List<String> args) async {
     }
   });
 
-  // Delete user and all their contributions
+  // Delete user and all their data (contributions, quiz/challenge results, sessions, OTPs)
   router.delete('/api/admin/users/<userId>', (Request request, String userId) async {
     try {
       final auth = request.headers['authorization'];
       if (auth == null || !auth.startsWith('Bearer ')) return Response(401, body: jsonEncode({'error':'Unauthorized'}), headers: {'Content-Type':'application/json'});
       if (!_isAdminToken(auth.substring(7))) return Response(403, body: jsonEncode({'error':'Forbidden'}), headers: {'Content-Type':'application/json'});
       
-      print('[ADMIN] 🗑️ Starting user deletion for: $userId');
+      print('[ADMIN] 🗑️ Starting CASCADE deletion for user: $userId');
       
-      // Get user first to verify they exist
-      final rows = db.select('SELECT id, email FROM users WHERE id = ? AND admin_passkey IS NULL', [userId]);
-      if (rows.isEmpty) {
-        return Response.notFound(jsonEncode({'error': 'User not found'}), headers: {'Content-Type':'application/json'});
+      // Get user first to verify they exist (try MongoDB first, then SQLite)
+      String? userEmail;
+      
+      if (mongoUsersCollection != null) {
+        try {
+          final mongoUser = await mongoUsersCollection!.findOne(where.eq('id', userId));
+          if (mongoUser != null && mongoUser['admin_passkey'] == null) {
+            userEmail = mongoUser['email'] as String?;
+          }
+        } catch (e) {
+          print('[ADMIN] ⚠️ MongoDB user lookup failed: $e');
+        }
       }
       
-      final userEmail = rows.first['email'] as String;
+      // Fallback to SQLite if MongoDB failed or user not found
+      if (userEmail == null) {
+        final rows = db.select('SELECT id, email FROM users WHERE id = ? AND admin_passkey IS NULL', [userId]);
+        if (rows.isEmpty) {
+          print('[ADMIN] ❌ User not found: $userId');
+          return Response.notFound(jsonEncode({'error': 'User not found'}), headers: {'Content-Type':'application/json'});
+        }
+        userEmail = rows.first['email'] as String;
+      }
       
-      // Delete all contributions from MongoDB
+      print('[ADMIN] 📧 Deleting all data for: $userEmail ($userId)');
+      
+      var deletedItems = <String, int>{};
+      
+      // 1. Delete all contributions by this user (stored by authorEmail)
       if (contribCollection != null) {
-        await contribCollection?.deleteMany({'userId': userId});
-        print('[ADMIN] 🗑️ Deleted all contributions for user $userId');
+        try {
+          final contribResult = await contribCollection!.deleteMany(where.eq('authorEmail', userEmail));
+          deletedItems['contributions'] = contribResult.nRemoved;
+          print('[ADMIN] 🗑️ Deleted ${deletedItems['contributions']} contributions');
+        } catch (e) {
+          print('[ADMIN] ⚠️ Error deleting contributions: $e');
+          deletedItems['contributions'] = 0;
+        }
       }
       
-      // Delete user from SQLite
-      db.execute('DELETE FROM users WHERE id = ?', [userId]);
-      print('[ADMIN] ✅ Deleted user: $userEmail ($userId)');
+      // 2. Delete all quiz results by this user (stored by userId and userEmail)
+      if (quizResultsCollection != null) {
+        try {
+          final quizResult = await quizResultsCollection!.deleteMany(where.eq('userId', userId));
+          deletedItems['quizResults'] = quizResult.nRemoved;
+          print('[ADMIN] 🗑️ Deleted ${deletedItems['quizResults']} quiz results');
+        } catch (e) {
+          print('[ADMIN] ⚠️ Error deleting quiz results: $e');
+          deletedItems['quizResults'] = 0;
+        }
+      }
       
-      return Response.ok(jsonEncode({'success': true, 'message': 'User and their contributions deleted'}), headers: {'Content-Type':'application/json'});
+      // 3. Delete all challenge results by this user (stored by userId and userEmail)
+      if (challengeResultsCollection != null) {
+        try {
+          final challengeResult = await challengeResultsCollection!.deleteMany(where.eq('userId', userId));
+          deletedItems['challengeResults'] = challengeResult.nRemoved;
+          print('[ADMIN] 🗑️ Deleted ${deletedItems['challengeResults']} challenge results');
+        } catch (e) {
+          print('[ADMIN] ⚠️ Error deleting challenge results: $e');
+          deletedItems['challengeResults'] = 0;
+        }
+      }
+      
+      // 4. Delete all sessions by this user
+      if (mongoSessionsCollection != null) {
+        try {
+          final sessionResult = await mongoSessionsCollection!.deleteMany(where.eq('userId', userId));
+          deletedItems['sessions'] = sessionResult.nRemoved;
+          print('[ADMIN] 🗑️ Deleted ${deletedItems['sessions']} sessions');
+        } catch (e) {
+          print('[ADMIN] ⚠️ Error deleting sessions: $e');
+          deletedItems['sessions'] = 0;
+        }
+      }
+      
+      // 5. Delete all email OTPs for this user
+      if (mongoEmailOtpsCollection != null) {
+        try {
+          final otpResult = await mongoEmailOtpsCollection!.deleteMany(where.eq('email', userEmail));
+          deletedItems['emailOtps'] = otpResult.nRemoved;
+          print('[ADMIN] 🗑️ Deleted ${deletedItems['emailOtps']} email OTPs');
+        } catch (e) {
+          print('[ADMIN] ⚠️ Error deleting email OTPs: $e');
+          deletedItems['emailOtps'] = 0;
+        }
+      }
+      
+      // 6. Delete user from MongoDB (primary database)
+      if (mongoUsersCollection != null) {
+        try {
+          final userResult = await mongoUsersCollection!.deleteOne(where.eq('id', userId));
+          print('[ADMIN] 🗑️ Deleted user from MongoDB: ${userResult.nRemoved} document(s)');
+        } catch (e) {
+          print('[ADMIN] ⚠️ Error deleting user from MongoDB: $e');
+        }
+      }
+      
+      // 7. Delete user from SQLite (fallback/cache)
+      try {
+        db.execute('DELETE FROM users WHERE id = ?', [userId]);
+        db.execute('DELETE FROM sessions WHERE user_id = ?', [userId]);
+        db.execute('DELETE FROM email_otps WHERE email = ?', [userEmail]);
+        print('[ADMIN] 🗑️ Deleted user from SQLite cache');
+      } catch (e) {
+        print('[ADMIN] ⚠️ Error deleting from SQLite: $e');
+      }
+      
+      // 8. Remove from in-memory cache
+      try {
+        usersCache.removeWhere((u) => u['id'] == userId);
+        print('[ADMIN] 🗑️ Removed user from in-memory cache');
+      } catch (e) {
+        print('[ADMIN] ⚠️ Error removing from cache: $e');
+      }
+      
+      print('[ADMIN] ✅ CASCADE deletion complete for: $userEmail ($userId)');
+      print('[ADMIN] 📊 Deleted: ${deletedItems.entries.map((e) => '${e.key}=${e.value}').join(', ')}');
+      
+      return Response.ok(jsonEncode({
+        'success': true, 
+        'message': 'User and all associated data deleted successfully',
+        'userEmail': userEmail,
+        'deletedItems': deletedItems,
+      }), headers: {'Content-Type':'application/json'});
     } catch (e) {
       print('[ADMIN] ❌ Error deleting user: $e');
       return Response.internalServerError(body: jsonEncode({'error': 'Error: $e'}), headers: {'Content-Type':'application/json'});
