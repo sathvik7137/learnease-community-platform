@@ -1203,13 +1203,13 @@ void main(List<String> args) async {
         return Response(401, body: jsonEncode({'error': 'Email not registered. Please sign up first.', 'sent': false}), headers: {'Content-Type': 'application/json'});
       }
       
-      print('[LOGIN OTP] ✅ User found: email=${user['email']}, hasPassword=${user['passwordHash'] != null && (user['passwordHash'] as String).isNotEmpty}');
+      print('[LOGIN OTP] ✅ User found: email=${user['email']}, hasPassword=${user['password_hash'] != null && (user['password_hash'] as String).isNotEmpty}');
       print('[LOGIN OTP] 🔑 Password to verify: "$password" (length=${password?.length ?? 0})');
       
       // Validate password if provided (for login flow)
       if (password != null && password.isNotEmpty) {
         print('[LOGIN OTP] Validating password (length=${password.length})...');
-        final storedHash = user['passwordHash'] as String?;
+        final storedHash = user['password_hash'] as String?;
         
         if (storedHash == null || storedHash.isEmpty) {
           print('[LOGIN OTP] ❌ No password hash found for user - account may have been created via OAuth');
