@@ -401,7 +401,26 @@ Future<Map<String, dynamic>?> _dbGetUserById(String id) async {
   };
 }
 
-void _dbInsertUser({required String id, String? email, String? password_hash, String? phone, String? google_id, required String created_at, String? username}) {
+Future<void> _dbInsertUser({required String id, String? email, String? password_hash, String? phone, String? google_id, required String created_at, String? username}) async {
+  // PRIMARY: Insert to MongoDB (production database)
+  try {
+    if (mongoUsersCollection != null) {
+      await mongoUsersCollection!.insertOne({
+        'id': id,
+        'email': email,
+        'password_hash': password_hash,
+        'phone': phone,
+        'google_id': google_id,
+        'created_at': created_at,
+        'username': username,
+      });
+      print('✅ [DB_INSERT] User $id inserted to MongoDB');
+    }
+  } catch (e) {
+    print('⚠️ [DB_INSERT] MongoDB insert failed: $e');
+  }
+  
+  // FALLBACK: Insert to SQLite (local cache)
   if (!dbAvailable) {
     usersCache.add({'id': id, 'email': email, 'password_hash': password_hash, 'phone': phone, 'google_id': google_id, 'created_at': created_at, 'username': username});
     return;
@@ -409,6 +428,9 @@ void _dbInsertUser({required String id, String? email, String? password_hash, St
   final stmt = db.prepare('INSERT INTO users (id, email, password_hash, phone, google_id, created_at, username) VALUES (?, ?, ?, ?, ?, ?, ?);');
   try {
     stmt.execute([id, email, password_hash, phone, google_id, created_at, username]);
+    print('✅ [DB_INSERT] User $id inserted to SQLite (fallback)');
+  } catch (e) {
+    print('⚠️ [DB_INSERT] SQLite insert failed: $e');
   } finally {
     stmt.dispose();
   }
@@ -815,7 +837,7 @@ void main(List<String> args) async {
       final newId = uuid.v4();
       final createdAt = DateTime.now().toIso8601String();
       final defaultUsername = username ?? email.split('@')[0];
-      _dbInsertUser(id: newId, email: email, password_hash: hash, phone: phone, google_id: null, created_at: createdAt, username: defaultUsername);
+      await _dbInsertUser(id: newId, email: email, password_hash: hash, phone: phone, google_id: null, created_at: createdAt, username: defaultUsername);
       final tokens = _issueTokens(newId, email);
       return Response.ok(jsonEncode({'token': tokens['accessToken'], 'refreshToken': tokens['refreshToken'], 'user': {'id': newId, 'email': email, 'phone': phone, 'username': defaultUsername}}), headers: {'Content-Type': 'application/json'});
     } catch (e) {
@@ -1422,7 +1444,7 @@ void main(List<String> args) async {
       if (user == null) {
         final newId = uuid.v4();
         final createdAt = DateTime.now().toIso8601String();
-        _dbInsertUser(id: newId, email: null, password_hash: null, phone: phone, google_id: null, created_at: createdAt);
+        await _dbInsertUser(id: newId, email: null, password_hash: null, phone: phone, google_id: null, created_at: createdAt);
         user = await _dbGetUserById(newId);
         print('👤 New user created: $newId');
       }
@@ -1515,7 +1537,7 @@ void main(List<String> args) async {
         final hash = BCrypt.hashpw(password, BCrypt.gensalt());
         final defaultUsername = username ?? email.split('@')[0];
         
-        _dbInsertUser(
+        await _dbInsertUser(
           id: newId, 
           email: email, 
           password_hash: hash, 
@@ -1574,7 +1596,7 @@ void main(List<String> args) async {
       if (user == null) {
         final newId = uuid.v4();
         final createdAt = DateTime.now().toIso8601String();
-        _dbInsertUser(id: newId, email: email, password_hash: null, phone: null, google_id: googleId, created_at: createdAt);
+        await _dbInsertUser(id: newId, email: email, password_hash: null, phone: null, google_id: googleId, created_at: createdAt);
         user = await _dbGetUserById(newId);
       } else {
         // ensure google id is stored/updated
@@ -1744,8 +1766,15 @@ void main(List<String> args) async {
     // Return ALL contributions (both approved and pending) for community section
     // Community section will display pending with status badge, approved without badge
     final all = await contribCollection?.find().toList() ?? [];
+    
+    // Remove authorEmail from response to protect user privacy
+    final sanitized = all.map((contrib) {
+      contrib.remove('authorEmail');
+      return contrib;
+    }).toList();
+    
     return Response.ok(
-      jsonEncode(all),
+      jsonEncode(sanitized),
       headers: {'Content-Type': 'application/json'},
     );
   });
@@ -2638,8 +2667,15 @@ void main(List<String> args) async {
     }
     // Only return approved contributions to public
     final filtered = await contribCollection?.find({'category': category, 'status': 'approved'}).toList() ?? [];
+    
+    // Remove authorEmail from response to protect user privacy
+    final sanitized = filtered.map((contrib) {
+      contrib.remove('authorEmail');
+      return contrib;
+    }).toList();
+    
     return Response.ok(
-      jsonEncode(filtered),
+      jsonEncode(sanitized),
       headers: {'Content-Type': 'application/json'},
     );
   });
