@@ -119,3 +119,22 @@ ios/build/
 # Debug symbols
 **/symbols/
 app.*.symbols
+
+# Old troubleshooting documentation (keep out of repo)
+ADMIN_*.md
+URGENT_*.md
+CRITICAL_*.md
+SECURITY_*.md
+MAKE_REPO_*.md
+DEPLOYMENT_*.md
+BACKEND_*.md
+GMAIL_*.md
+MONGODB_*.md
+RENDER_*.md
+READY_FOR_*.md
+PRE_COMMIT_*.md
+GIT_HISTORY_*.md
+FIX_SECURITY_*.bat
+START_HERE.md
+TEMP_*.md
+setup_admin_passkey.html
