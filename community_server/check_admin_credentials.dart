@@ -3,8 +3,15 @@ import 'package:bcrypt/bcrypt.dart';
 import 'dart:io';
 
 void main() async {
-  final mongoUri = Platform.environment['MONGODB_URI'] ?? 
-      'mongodb+srv://sathvik7137:S%40thvik2004@learnease.4dvte.mongodb.net/learnease?retryWrites=true&w=majority';
+  // Read from environment variable (Vardhan's MongoDB Atlas account)
+  final mongoUri = Platform.environment['MONGODB_URI'];
+  
+  if (mongoUri == null) {
+    print('❌ ERROR: MONGODB_URI environment variable not set!');
+    print('💡 Set it in your environment or .env file');
+    print('   This should use Vardhan\'s MongoDB Atlas credentials (rayapureddyvardhan account)');
+    exit(1);
+  }
   
   print('🔍 Checking Admin User in MongoDB\n');
   
@@ -100,9 +107,16 @@ void main() async {
     print('=' * 60);
     
     // Offer to fix
-    if (passwordHash == null || passkeyHash == null || 
-        !BCrypt.checkpw('Admin@2024', passwordHash ?? '') ||
-        !BCrypt.checkpw('052026', passkeyHash ?? '')) {
+    bool needsFix = false;
+    if (passwordHash == null || passkeyHash == null) {
+      needsFix = true;
+    } else {
+      if (!BCrypt.checkpw('Admin@2024', passwordHash) || !BCrypt.checkpw('052026', passkeyHash)) {
+        needsFix = true;
+      }
+    }
+    
+    if (needsFix) {
       print('\n💡 SOLUTION: Run the fix script to set correct credentials');
       print('   Command: dart run community_server/fix_admin_credentials.dart');
     }

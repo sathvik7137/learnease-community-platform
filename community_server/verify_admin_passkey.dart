@@ -9,8 +9,14 @@ void main() async {
   print('🔐 Admin Passkey Verification Tool\n');
   print('Testing with passkey: $testPasskey\n');
   
-  final mongoUri = Platform.environment['MONGODB_URI'] ?? 
-      'mongodb+srv://sathvik7137:S%40thvik2004@learnease.4dvte.mongodb.net/learnease?retryWrites=true&w=majority';
+  // Read from environment variable (Vardhan's MongoDB Atlas account)
+  final mongoUri = Platform.environment['MONGODB_URI'];
+  
+  if (mongoUri == null) {
+    print('❌ ERROR: MONGODB_URI environment variable not set!');
+    print('💡 This should use Vardhan\'s MongoDB Atlas credentials');
+    exit(1);
+  }
   
   try {
     print('🔌 Connecting to MongoDB...');
