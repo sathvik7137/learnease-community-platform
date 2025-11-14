@@ -27,6 +27,23 @@ applyTo: '**'
   feat(scope): short summary
 - Never commit secrets or .env files.
 
+## File Deletion & Cleanup Rules (CRITICAL)
+When deleting files:
+1. **ALWAYS check .gitignore FIRST** before adding any files
+2. **Delete files physically** using Remove-Item or rm commands
+3. **Remove from git tracking** using: git rm --cached <files>
+4. **Update .gitignore** to prevent files from coming back
+5. **Commit deletions** with clear message about what was removed
+6. **NEVER create temporary .md files** for troubleshooting (use comments in code instead)
+7. **If temp files exist**: Delete them immediately, add patterns to .gitignore, then commit
+
+Common patterns to NEVER commit:
+- *_test.dart, test_*.dart (unless in test/ directory)
+- debug_*.dart, check_*.dart, diagnose_*.dart
+- *.log, *.txt (output files), *.db (local databases)
+- TEMP_*.md, ADMIN_*.md, SECURITY_*.md (troubleshooting docs)
+- Any file matching patterns in .gitignore
+
 ## Code Style
 - Prefer TypeScript when possible.
 - Clean code, strict typing, small functions.
