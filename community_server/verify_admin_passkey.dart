@@ -3,11 +3,18 @@ import 'package:bcrypt/bcrypt.dart';
 import 'dart:io';
 
 void main() async {
-  // Test passkey
-  final testPasskey = 'admin1';  // Replace with your actual 6-character passkey
-  
   print('🔐 Admin Passkey Verification Tool\n');
-  print('Testing with passkey: $testPasskey\n');
+  
+  // Prompt for passkey securely (don't hardcode)
+  stdout.write('Enter admin passkey to verify: ');
+  final testPasskey = stdin.readLineSync();
+  
+  if (testPasskey == null || testPasskey.isEmpty) {
+    print('❌ No passkey provided');
+    exit(1);
+  }
+  
+  print('');
   
   // Read from environment variable (Vardhan's MongoDB Atlas account)
   final mongoUri = Platform.environment['MONGODB_URI'];

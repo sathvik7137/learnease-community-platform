@@ -2,19 +2,25 @@ import 'package:mongo_dart/mongo_dart.dart';
 import 'package:bcrypt/bcrypt.dart';
 import 'dart:io';
 
-/// This script sets a KNOWN passkey for admin@learnease.com
+/// This script sets a passkey for admin@learnease.com
 /// Run this on your LOCAL machine, it will update the PRODUCTION MongoDB
 void main() async {
-  // ⚠️ IMPORTANT: Set your desired passkey here
-  final String newPasskey = '052026';  // User's actual passkey
-  
   print('🔐 Setting Admin Passkey Tool\n');
   print('=' * 60);
   print('Email: admin@learnease.com');
-  print('New Passkey: $newPasskey');
   print('=' * 60);
   print('');
   
+  // Prompt for passkey securely (don't hardcode)
+  stdout.write('Enter NEW admin passkey (min 6 characters): ');
+  final newPasskey = stdin.readLineSync();
+  
+  if (newPasskey == null || newPasskey.length < 6) {
+    print('❌ Passkey must be at least 6 characters');
+    exit(1);
+  }
+  
+  print('');
   print('⚠️  WARNING: This will UPDATE the admin_passkey in PRODUCTION MongoDB!');
   print('Do you want to continue? (yes/no): ');
   

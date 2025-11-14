@@ -50,16 +50,21 @@ void main() async {
       print('❌ password_hash: MISSING (NULL)');
     } else {
       print('✅ password_hash: EXISTS (${passwordHash.length} chars)');
-      print('   Starts with: ${passwordHash.substring(0, 10)}...');
+      print('   Hash format: ***hidden***');
       
-      // Test password
-      print('\n🧪 Testing password: "Admin@2024"');
-      final matches = BCrypt.checkpw('Admin@2024', passwordHash);
-      if (matches) {
-        print('   ✅ Password "Admin@2024" MATCHES!');
+      // Test password - PROMPT user for security
+      stdout.write('\n🧪 Enter password to test (or press Enter to skip): ');
+      final testPassword = stdin.readLineSync();
+      
+      if (testPassword != null && testPassword.isNotEmpty) {
+        final matches = BCrypt.checkpw(testPassword, passwordHash);
+        if (matches) {
+          print('   ✅ Password MATCHES!');
+        } else {
+          print('   ❌ Password does NOT match');
+        }
       } else {
-        print('   ❌ Password "Admin@2024" does NOT match');
-        print('   💡 The password hash is set to something else');
+        print('   ⏭️  Skipped password test');
       }
     }
     
@@ -71,16 +76,21 @@ void main() async {
       print('❌ admin_passkey: MISSING (NULL)');
     } else {
       print('✅ admin_passkey: EXISTS (${passkeyHash.length} chars)');
-      print('   Starts with: ${passkeyHash.substring(0, 10)}...');
+      print('   Hash format: ***hidden***');
       
-      // Test passkey
-      print('\n🧪 Testing passkey: "052026"');
-      final matches = BCrypt.checkpw('052026', passkeyHash);
-      if (matches) {
-        print('   ✅ Passkey "052026" MATCHES!');
+      // Test passkey - PROMPT user for security
+      stdout.write('\n🧪 Enter passkey to test (or press Enter to skip): ');
+      final testPasskey = stdin.readLineSync();
+      
+      if (testPasskey != null && testPasskey.isNotEmpty) {
+        final matches = BCrypt.checkpw(testPasskey, passkeyHash);
+        if (matches) {
+          print('   ✅ Passkey MATCHES!');
+        } else {
+          print('   ❌ Passkey does NOT match');
+        }
       } else {
-        print('   ❌ Passkey "052026" does NOT match');
-        print('   💡 The passkey hash is set to something else');
+        print('   ⏭️  Skipped passkey test');
       }
     }
     
@@ -88,37 +98,24 @@ void main() async {
     print('SUMMARY:');
     print('=' * 60);
     
-    if (passwordHash != null && BCrypt.checkpw('Admin@2024', passwordHash)) {
-      print('✅ Password is CORRECT: Admin@2024');
-    } else if (passwordHash == null) {
+    if (passwordHash == null) {
       print('❌ Password is NOT SET');
     } else {
-      print('❌ Password is WRONG (not Admin@2024)');
+      print('✅ Password hash is SET');
     }
     
-    if (passkeyHash != null && BCrypt.checkpw('052026', passkeyHash)) {
-      print('✅ Passkey is CORRECT: 052026');
-    } else if (passkeyHash == null) {
+    if (passkeyHash == null) {
       print('❌ Passkey is NOT SET');
     } else {
-      print('❌ Passkey is WRONG (not 052026)');
+      print('✅ Passkey hash is SET');
     }
     
     print('=' * 60);
     
-    // Offer to fix
-    bool needsFix = false;
+    // Offer to fix if credentials missing
     if (passwordHash == null || passkeyHash == null) {
-      needsFix = true;
-    } else {
-      if (!BCrypt.checkpw('Admin@2024', passwordHash) || !BCrypt.checkpw('052026', passkeyHash)) {
-        needsFix = true;
-      }
-    }
-    
-    if (needsFix) {
-      print('\n💡 SOLUTION: Run the fix script to set correct credentials');
-      print('   Command: dart run community_server/fix_admin_credentials.dart');
+      print('\n💡 SOLUTION: Set credentials using environment variables');
+      print('   Run: dart run community_server/set_admin_passkey.dart');
     }
     
     await db.close();

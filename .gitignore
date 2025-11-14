@@ -75,7 +75,31 @@ community_server/test_output.txt
 community_server/user_check.txt
 community_server/email_list.txt
 community_server/users.json
+community_server/users_export.json
 community_server/contributions.json
+
+# Test and debug scripts (keep out of production)
+community_server/*_test*.dart
+community_server/test_*.dart
+community_server/debug_*.dart
+community_server/check_*.dart
+!community_server/check_admin_credentials.dart
+community_server/diagnose_*.dart
+community_server/quick_*.dart
+community_server/list_*.dart
+community_server/find_*.dart
+community_server/verify_credentials.dart
+
+# One-time migration scripts (not needed after initial setup)
+community_server/create_*.dart
+community_server/delete_all_*.dart
+community_server/export_*.dart
+community_server/import_*.dart
+community_server/insert_*.dart
+community_server/reset_*.dart
+community_server/complete_*.dart
+community_server/fix_*.dart
+community_server/get_gmail_*.dart
 
 # Android signing keys (NEVER COMMIT - Security critical!)
 *.jks
