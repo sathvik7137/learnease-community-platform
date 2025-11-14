@@ -2222,38 +2222,46 @@ void main(List<String> args) async {
     // Query MongoDB first (production)
     if (mongoUsersCollection != null) {
       try {
-        print('[ADMIN] 🔍 Querying MongoDB for users...');
-        final cursor = mongoUsersCollection!.find(where.excludeFields(['password_hash', 'admin_passkey']));
+        print('[ADMIN] 🔍 Querying MongoDB for non-admin users...');
+        
+        // Query for users WITHOUT admin_passkey (regular users only)
+        // Use $or with null check to catch both missing field and null value
+        final cursor = mongoUsersCollection!.find(
+          where.eq('admin_passkey', null)
+        );
         final mongoUsers = await cursor.toList();
         
-        print('[ADMIN] 📊 Found ${mongoUsers.length} users in MongoDB');
+        print('[ADMIN] 📊 Found ${mongoUsers.length} regular users in MongoDB (admin excluded)');
         
         // Get contribution count from MongoDB for each user
         for (final mongoUser in mongoUsers) {
           final userEmail = mongoUser['email'] as String?;
-          final isAdmin = mongoUser['admin_passkey'] != null;
+          final userId = mongoUser['id'] as String?;
           
-          // Skip admin users from the user management list
-          if (isAdmin) {
-            print('[ADMIN] ⏭️ Skipping admin user: $userEmail');
-            continue;
-          }
-          
-          if (userEmail != null) {
+          if (userEmail != null && userId != null) {
+            // Double-check this is not an admin (safety check)
+            if (mongoUser['admin_passkey'] != null) {
+              print('[ADMIN] ⏭️ Safety check: Skipping user with admin_passkey: $userEmail');
+              continue;
+            }
+            
             // Count contributions by authorEmail
             final count = await contribCollection?.count({'authorEmail': userEmail}) ?? 0;
             out.add({
-              'id': mongoUser['id'] as String?,
+              'id': userId,
               'email': userEmail,
               'username': mongoUser['username'] as String? ?? userEmail.split('@')[0],
               'createdAt': mongoUser['created_at'] as String?,
               'contributionCount': count,
             });
-            print('[ADMIN] 👤 User $userEmail has $count contributions');
+            print('[ADMIN] 👤 User $userEmail (ID: $userId) has $count contributions');
+          } else {
+            print('[ADMIN] ⚠️ Skipping user with missing email or ID');
           }
         }
       } catch (e) {
         print('[ADMIN] ❌ MongoDB query error: $e');
+        print('[ADMIN] Stack trace: ${StackTrace.current}');
         // Don't return error, try SQLite fallback below
       }
     }
