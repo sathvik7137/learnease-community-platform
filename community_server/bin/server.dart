@@ -2217,27 +2217,51 @@ void main(List<String> args) async {
     if (auth == null || !auth.startsWith('Bearer ')) return Response(401, body: jsonEncode({'error':'Unauthorized'}), headers: {'Content-Type':'application/json'});
     if (!_isAdminToken(auth.substring(7))) return Response(403, body: jsonEncode({'error':'Forbidden'}), headers: {'Content-Type':'application/json'});
     
-    final rows = db.select('SELECT id, email, username, created_at FROM users WHERE admin_passkey IS NULL');
     final out = <Map<String, dynamic>>[];
     
-    // Get contribution count from MongoDB for each user
-    if (contribCollection != null) {
-      for (final r in rows) {
-        final userId = r['id'] as String;
-        final userEmail = r['email'] as String;
-        // Count contributions by authorEmail (which is how they're stored in MongoDB)
-        final count = await contribCollection?.count({'authorEmail': userEmail}) ?? 0;
-        out.add({
-          'id': userId,
-          'email': userEmail,
-          'username': r['username'],
-          'createdAt': r['created_at'],
-          'contributionCount': count,
-        });
-        print('[ADMIN] 👤 User $userEmail has $count contributions');
+    // Query MongoDB first (production)
+    if (mongoUsersCollection != null) {
+      try {
+        print('[ADMIN] 🔍 Querying MongoDB for users...');
+        final cursor = mongoUsersCollection!.find(where.excludeFields(['password_hash', 'admin_passkey']));
+        final mongoUsers = await cursor.toList();
+        
+        print('[ADMIN] 📊 Found ${mongoUsers.length} users in MongoDB');
+        
+        // Get contribution count from MongoDB for each user
+        for (final mongoUser in mongoUsers) {
+          final userEmail = mongoUser['email'] as String?;
+          final isAdmin = mongoUser['admin_passkey'] != null;
+          
+          // Skip admin users from the user management list
+          if (isAdmin) {
+            print('[ADMIN] ⏭️ Skipping admin user: $userEmail');
+            continue;
+          }
+          
+          if (userEmail != null) {
+            // Count contributions by authorEmail
+            final count = await contribCollection?.count({'authorEmail': userEmail}) ?? 0;
+            out.add({
+              'id': mongoUser['id'] as String?,
+              'email': userEmail,
+              'username': mongoUser['username'] as String? ?? userEmail.split('@')[0],
+              'createdAt': mongoUser['created_at'] as String?,
+              'contributionCount': count,
+            });
+            print('[ADMIN] 👤 User $userEmail has $count contributions');
+          }
+        }
+      } catch (e) {
+        print('[ADMIN] ❌ MongoDB query error: $e');
+        // Don't return error, try SQLite fallback below
       }
-    } else {
-      // Fallback if MongoDB is unavailable
+    }
+    
+    // Fallback to SQLite if MongoDB query returned no results or failed
+    if (out.isEmpty) {
+      print('[ADMIN] 🔄 Falling back to SQLite database');
+      final rows = db.select('SELECT id, email, username, created_at FROM users WHERE admin_passkey IS NULL');
       out.addAll(rows.map((r) => {
         'id': r['id'],
         'email': r['email'],
@@ -2247,7 +2271,7 @@ void main(List<String> args) async {
       }));
     }
     
-    print('[ADMIN] 📊 Loaded ${out.length} users with contribution counts');
+    print('[ADMIN] 📊 Returning ${out.length} users to admin panel');
     return Response.ok(jsonEncode(out), headers: {'Content-Type':'application/json'});
   });
 
