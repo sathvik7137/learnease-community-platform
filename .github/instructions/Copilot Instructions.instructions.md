@@ -13,12 +13,14 @@ applyTo: '**'
 - All project changes must push to this repo:
   https://github.com/sathvik7137/learnease-community-platform/tree/main
 - Default branch: `main`.
-- Do not create, edit, or suggest any README.md or other .md files unless the user explicitly says: "the entire project is complete".
+- Do not create, edit, or suggest any README.md or other .md files.
+- Do not create documentation files anymore.
+- Never create .md files.
 
 ## Terminal Commands
 - Every command must be shown as:
   `Run in NEW TERMINAL: <command>`
-- Only use SAME TERMINAL when absolutely required.
+- Don't use SAME TERMINAL.
 
 ## Git Rules
 - Always push to:
@@ -34,7 +36,7 @@ When deleting files:
 3. **Remove from git tracking** using: git rm --cached <files>
 4. **Update .gitignore** to prevent files from coming back
 5. **Commit deletions** with clear message about what was removed
-6. **NEVER create temporary .md files** for troubleshooting (use comments in code instead)
+6. **NEVER create temporary .md files**
 7. **If temp files exist**: Delete them immediately, add patterns to .gitignore, then commit
 
 Common patterns to NEVER commit:
@@ -57,7 +59,9 @@ For every task:
 3. Show commands to run (NEW TERMINAL format).
 4. Include test instructions.
 5. Keep summary short.
-6. Do not touch .md files unless final completion is declared.
+6. Do not create .md files.
+7. Do not create documentation files.
+8. Never create .md files.
 
 ## PR & Review Rules
 - Explain problem, approach, tests, and security notes.
