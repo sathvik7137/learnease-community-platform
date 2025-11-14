@@ -77,7 +77,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
 
       // Load stats from public stats endpoint (works for both admin and regular users)
       try {
-        print('[AdminDashboard] 📊 Loading stats from public endpoint');
+        // Only log on first load or when stats change, not every poll
+        if (_previousStats == null) {
+          print('[AdminDashboard] 📊 Loading stats from public endpoint: ${ApiConfig.webBaseUrl}');
+        }
         final response = await http.get(
           Uri.parse('${ApiConfig.webBaseUrl}/api/stats/public'),
         ).timeout(const Duration(seconds: 5));
@@ -114,7 +117,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
           
           print('[AdminDashboard] ✅ Stats: Users=$_totalUsers, Contributions=$_totalContributions, Pending=$_pendingContributions, Approved=$_approvedContributions, Rejected=$_rejectedContributions');
         } else {
-          print('[AdminDashboard] ⚠️ Stats API returned ${response.statusCode}');
+          // Only log errors on first load
+          if (_previousStats == null) {
+            print('[AdminDashboard] ⚠️ Stats API returned ${response.statusCode}');
+          }
           if (_previousStats == null && mounted) {
             setState(() {
               _totalUsers = 0;
@@ -128,7 +134,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
           }
         }
       } catch (e) {
-        print('[AdminDashboard] ⚠️ Stats API failed: $e');
+        // Only log errors on first load to avoid spam
+        if (_previousStats == null) {
+          print('[AdminDashboard] ❌ Stats API failed: $e');
+        }
         if (_previousStats == null && mounted) {
           setState(() {
             _totalUsers = 0;
@@ -164,8 +173,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Ticker
   }
   
   void _startPolling() {
-    print('[AdminDashboard] 🔄 Starting real-time polling every 5 seconds');
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    print('[AdminDashboard] 🔄 Starting real-time polling every 30 seconds');
+    // Poll every 30 seconds instead of 5 (less aggressive, better UX)
+    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted && !_isPolling) {
         _isPolling = true;
         _loadAdminInfo().then((_) {

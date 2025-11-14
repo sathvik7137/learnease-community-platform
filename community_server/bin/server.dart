@@ -1755,11 +1755,14 @@ void main(List<String> args) async {
     try {
       print('🔵 [PUBLIC_STATS] Fetching platform statistics');
       
-      // Get total users (excluding admin)
+      // Get total users from MongoDB (excluding admin)
       int totalUsers = 0;
       try {
-        final userCount = db.select('SELECT COUNT(*) as count FROM users WHERE admin_passkey IS NULL');
-        totalUsers = (userCount.isNotEmpty ? userCount.first['count'] as int : 0);
+        if (mongoUsersCollection != null) {
+          // Count users without admin_passkey (regular users)
+          totalUsers = await mongoUsersCollection!.count(where.eq('admin_passkey', null));
+          print('📊 [PUBLIC_STATS] Found $totalUsers regular users (excluding admin)');
+        }
       } catch (e) {
         print('⚠️ Could not count users: $e');
       }

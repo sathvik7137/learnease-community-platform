@@ -26,14 +26,18 @@ class ApiConfig {
   }
   
   /// Alternative: Check if running on web (Firebase)
-  /// Returns production URL for web, localhost for debug
+  /// Returns production URL for web deployment
+  /// ALWAYS returns production for consistency with baseUrl
   static String get webBaseUrl {
-    // For Firebase Hosting (web), always use production
-    // For local development, use localhost
-    if (kDebugMode) {
-      return _developmentBaseUrl;
-    }
+    // ALWAYS use production URL for consistency
+    // This ensures all API calls go to Render backend
     return _productionBaseUrl;
+    
+    // ORIGINAL CODE (uncomment if you need localhost backend):
+    // if (kDebugMode) {
+    //   return _developmentBaseUrl;
+    // }
+    // return _productionBaseUrl;
   }
   
   /// Health check endpoint
