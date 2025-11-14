@@ -2383,14 +2383,16 @@ void main(List<String> args) async {
       
       var deletedItems = <String, int>{};
       
-      // 1. Delete all contributions by this user (stored by authorEmail)
+      // 1. KEEP contributions when user is deleted (community content persists)
+      // Contributions remain in database even after user deletion
+      // Only admin can delete approved contributions from the community section
       if (contribCollection != null) {
         try {
-          final contribResult = await contribCollection!.deleteMany(where.eq('authorEmail', userEmail));
-          deletedItems['contributions'] = contribResult.nRemoved;
-          print('[ADMIN] 🗑️ Deleted ${deletedItems['contributions']} contributions');
+          final userContribs = await contribCollection!.find(where.eq('authorEmail', userEmail)).toList();
+          deletedItems['contributions'] = userContribs.length;
+          print('[ADMIN] ℹ️  User has ${deletedItems['contributions']} contributions that will remain in community');
         } catch (e) {
-          print('[ADMIN] ⚠️ Error deleting contributions: $e');
+          print('[ADMIN] ⚠️ Error counting contributions: $e');
           deletedItems['contributions'] = 0;
         }
       }
@@ -2809,10 +2811,28 @@ void main(List<String> args) async {
       }
       print('✅ Document found');
       
-      if (doc['authorId'] != userId) {
+      // Check if content is approved
+      final status = doc['status'] as String?;
+      final isAdmin = _isAdminToken(token);
+      
+      // If content is approved, only admin can edit
+      if (status == 'approved' && !isAdmin) {
+        print('❌ Cannot edit approved content. Only admin can edit approved contributions.');
+        return Response.forbidden(
+          jsonEncode({
+            'error': 'Approved content cannot be edited by users',
+            'message': 'Once content is approved, only administrators can make changes. Contact admin if you need to update this contribution.'
+          }), 
+          headers: {'Content-Type': 'application/json'}
+        );
+      }
+      
+      // For pending content, check if user is the author
+      if (!isAdmin && doc['authorId'] != userId) {
         print('❌ User is not the author. Doc author: ${doc['authorId']}, User: $userId');
         return Response.forbidden(jsonEncode({'error': 'You can only edit your own contributions'}), headers: {'Content-Type': 'application/json'});
       }
+      
       final payload = await request.readAsString();
       final data = jsonDecode(payload) as Map<String, dynamic>;
       print('✅ Payload decoded, updating document...');
@@ -2884,13 +2904,40 @@ void main(List<String> args) async {
       }
       print('✅ Document found');
       
-      // Check authorization using multiple methods
+      // Check if content is approved
+      final status = doc['status'] as String?;
+      final isAdmin = _isAdminToken(token);
+      
+      // If content is approved, only admin can delete
+      if (status == 'approved' && !isAdmin) {
+        print('❌ Cannot delete approved content. Only admin can delete approved contributions.');
+        return Response.forbidden(
+          jsonEncode({
+            'error': 'Approved content cannot be deleted by users',
+            'message': 'Once content is approved, only administrators can delete it. Contact admin if you need to remove this contribution.'
+          }), 
+          headers: {'Content-Type': 'application/json'}
+        );
+      }
+      
+      // For pending content or if user is admin, check authorization
       final docAuthorId = doc['authorId'] as String?;
       final docAuthorName = doc['authorName'] as String? ?? doc['authorUsername'] as String?;
       print('   Document authorId: $docAuthorId, authorName: $docAuthorName');
-      print('   Current userId: $userId');
+      print('   Current userId: $userId, isAdmin: $isAdmin');
       
-      // Authorization check - try multiple methods
+      // Admin can delete any contribution
+      if (isAdmin) {
+        print('✅ Admin authorized to delete any contribution');
+        await contribCollection?.deleteOne({'_id': docId});
+        print('✅ Document deleted by admin');
+        return Response.ok(
+          jsonEncode({'success': true, 'message': 'Contribution deleted by administrator'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+      
+      // Authorization check for non-admin users - try multiple methods
       bool isAuthorized = false;
       
       // Method 1: Direct ID match (for new contributions)
@@ -3403,10 +3450,12 @@ void main(List<String> args) async {
         stmt.execute([userId]);
         print('[DELETE ACCOUNT] ✅ User deleted from database: $userId ($email)');
 
-        // Delete all contributions from MongoDB
+        // KEEP contributions when user deletes account (community content persists)
+        // Contributions remain in database for community value
+        // Only admin can delete approved contributions
         if (mongoDb != null && contribCollection != null) {
-          final result = await contribCollection!.deleteMany(where.eq('authorId', userId));
-          print('[DELETE ACCOUNT] ✅ Deleted ${result.nRemoved} contributions from MongoDB');
+          final userContribs = await contribCollection!.find(where.eq('authorId', userId)).toList();
+          print('[DELETE ACCOUNT] ℹ️  User has ${userContribs.length} contributions that will remain in community');
         }
 
         // Delete OTP record
