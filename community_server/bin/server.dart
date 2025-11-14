@@ -2247,46 +2247,57 @@ void main(List<String> args) async {
     if (!_isAdminToken(auth.substring(7))) return Response(403, body: jsonEncode({'error':'Forbidden'}), headers: {'Content-Type':'application/json'});
     
     final out = <Map<String, dynamic>>[];
+    final processedEmails = <String>{}; // Track processed users to avoid duplicates
     
-    // Query MongoDB first (production)
+    // Query MongoDB first (production) - Get ALL users except current admin
     if (mongoUsersCollection != null) {
       try {
-        print('[ADMIN] 🔍 Querying MongoDB for non-admin users...');
+        print('[ADMIN] 🔍 Querying MongoDB for ALL users (admin excluded)...');
         
-        // Query for users WITHOUT admin_passkey (regular users only)
-        // Use $or with null check to catch both missing field and null value
-        final cursor = mongoUsersCollection!.find(
-          where.eq('admin_passkey', null)
-        );
+        // Get admin email from token to exclude current admin
+        final token = auth.substring(7);
+        String? currentAdminEmail;
+        try {
+          final decoded = JWT.verify(token, SecretKey(jwtSecret));
+          currentAdminEmail = decoded.payload['email'] as String?;
+          print('[ADMIN] 👮 Current admin: $currentAdminEmail');
+        } catch (e) {
+          print('[ADMIN] ⚠️ Could not decode token: $e');
+        }
+        
+        // Query ALL users from MongoDB
+        final cursor = mongoUsersCollection!.find();
         final mongoUsers = await cursor.toList();
         
-        print('[ADMIN] 📊 Found ${mongoUsers.length} regular users in MongoDB (admin excluded)');
+        print('[ADMIN] 📊 Found ${mongoUsers.length} total users in MongoDB');
         
         // Get contribution count from MongoDB for each user
         for (final mongoUser in mongoUsers) {
           final userEmail = mongoUser['email'] as String?;
           final userId = mongoUser['id'] as String?;
           
-          if (userEmail != null && userId != null) {
-            // Double-check this is not an admin (safety check)
-            if (mongoUser['admin_passkey'] != null) {
-              print('[ADMIN] ⏭️ Safety check: Skipping user with admin_passkey: $userEmail');
-              continue;
-            }
-            
-            // Count contributions by authorEmail
-            final count = await contribCollection?.count({'authorEmail': userEmail}) ?? 0;
-            out.add({
-              'id': userId,
-              'email': userEmail,
-              'username': mongoUser['username'] as String? ?? userEmail.split('@')[0],
-              'createdAt': mongoUser['created_at'] as String?,
-              'contributionCount': count,
-            });
-            print('[ADMIN] 👤 User $userEmail (ID: $userId) has $count contributions');
-          } else {
-            print('[ADMIN] ⚠️ Skipping user with missing email or ID');
+          // Skip if already processed or missing fields
+          if (userEmail == null || userId == null || processedEmails.contains(userEmail)) {
+            continue;
           }
+          
+          // Skip current admin from the list (admin can't manage themselves)
+          if (currentAdminEmail != null && userEmail.toLowerCase() == currentAdminEmail.toLowerCase()) {
+            print('[ADMIN] 👮 Skipping current admin: $userEmail');
+            continue;
+          }
+          
+          // Count contributions by authorEmail
+          final count = await contribCollection?.count({'authorEmail': userEmail}) ?? 0;
+          out.add({
+            'id': userId,
+            'email': userEmail,
+            'username': mongoUser['username'] as String? ?? userEmail.split('@')[0],
+            'createdAt': mongoUser['created_at'] as String?,
+            'contributionCount': count,
+          });
+          processedEmails.add(userEmail);
+          print('[ADMIN] 👤 User $userEmail (ID: $userId) has $count contributions');
         }
       } catch (e) {
         print('[ADMIN] ❌ MongoDB query error: $e');
@@ -2298,14 +2309,21 @@ void main(List<String> args) async {
     // Fallback to SQLite if MongoDB query returned no results or failed
     if (out.isEmpty) {
       print('[ADMIN] 🔄 Falling back to SQLite database');
-      final rows = db.select('SELECT id, email, username, created_at FROM users WHERE admin_passkey IS NULL');
-      out.addAll(rows.map((r) => {
-        'id': r['id'],
-        'email': r['email'],
-        'username': r['username'],
-        'createdAt': r['created_at'],
-        'contributionCount': 0,
-      }));
+      final rows = db.select('SELECT id, email, username, created_at FROM users');
+      out.addAll(rows.map((r) {
+        final email = r['email'] as String;
+        if (!processedEmails.contains(email)) {
+          processedEmails.add(email);
+          return {
+            'id': r['id'],
+            'email': email,
+            'username': r['username'],
+            'createdAt': r['created_at'],
+            'contributionCount': 0,
+          };
+        }
+        return null;
+      }).whereType<Map<String, dynamic>>());
     }
     
     print('[ADMIN] 📊 Returning ${out.length} users to admin panel');
