@@ -1,4 +1,27 @@
-# 🎓 LearnEase Community Learning Platform
+LearnEase Community Platform
+
+Status: Active — consolidated documentation. This README replaces scattered .md files. Keep only this file in repo root.
+
+Quick Start
+- Backend: community_server (Dart). Deploy or run locally.
+- Frontend: Flutter app (web and mobile). Run `flutter run -d chrome --web-port 7777` for web.
+
+Backend Notes
+- Uses MongoDB for persistence. Ensure `mongoUsersCollection` and `contribCollection` are configured.
+- Important endpoints:
+  - POST /api/auth/admin-login
+  - GET  /api/stats/public
+  - [Other endpoints available in server code]
+
+Security
+- Repo previously contained sensitive credentials. Ensure secrets are stored in environment variables and rotated.
+- Temporary admin setup endpoints were used; remove any setup endpoints after recovery.
+
+Deployment
+- Production backend: https://learnease-community-platform.onrender.com
+- Ensure Render environment variables for Gmail API if email sending is required.
+
+If you need more documentation, keep it small and add it to this README.# 🎓 LearnEase Community Learning Platform
 
 <div align="center">
 

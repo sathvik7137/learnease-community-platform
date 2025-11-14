@@ -327,10 +327,10 @@ Future<Map<String, dynamic>?> _dbGetUserByEmail(String email) async {
   return {
     'id': row['id'] as String,
     'email': row['email'] as String?,
-    'passwordHash': row['password_hash'] as String?,
+    'password_hash': row['password_hash'] as String?,
     'phone': row['phone'] as String?,
-    'googleId': row['google_id'] as String?,
-    'createdAt': row['created_at'] as String?,
+    'google_id': row['google_id'] as String?,
+    'created_at': row['created_at'] as String?,
     'username': row['username'] as String?,
     'admin_passkey': row['admin_passkey'] as String?,
   };
@@ -350,10 +350,10 @@ Map<String, dynamic>? _dbGetUserByPhone(String phone) {
   return {
     'id': row['id'] as String,
     'email': row['email'] as String?,
-    'passwordHash': row['password_hash'] as String?,
+    'password_hash': row['password_hash'] as String?,
     'phone': row['phone'] as String?,
-    'googleId': row['google_id'] as String?,
-    'createdAt': row['created_at'] as String?,
+    'google_id': row['google_id'] as String?,
+    'created_at': row['created_at'] as String?,
     'username': row['username'] as String?,
   };
 }
@@ -393,22 +393,22 @@ Future<Map<String, dynamic>?> _dbGetUserById(String id) async {
   return {
     'id': row['id'] as String,
     'email': row['email'] as String?,
-    'passwordHash': row['password_hash'] as String?,
+    'password_hash': row['password_hash'] as String?,
     'phone': row['phone'] as String?,
-    'googleId': row['google_id'] as String?,
-    'createdAt': row['created_at'] as String?,
+    'google_id': row['google_id'] as String?,
+    'created_at': row['created_at'] as String?,
     'username': row['username'] as String?,
   };
 }
 
-void _dbInsertUser({required String id, String? email, String? passwordHash, String? phone, String? googleId, required String createdAt, String? username}) {
+void _dbInsertUser({required String id, String? email, String? password_hash, String? phone, String? google_id, required String created_at, String? username}) {
   if (!dbAvailable) {
-    usersCache.add({'id': id, 'email': email, 'passwordHash': passwordHash, 'phone': phone, 'googleId': googleId, 'createdAt': createdAt, 'username': username});
+    usersCache.add({'id': id, 'email': email, 'password_hash': password_hash, 'phone': phone, 'google_id': google_id, 'created_at': created_at, 'username': username});
     return;
   }
   final stmt = db.prepare('INSERT INTO users (id, email, password_hash, phone, google_id, created_at, username) VALUES (?, ?, ?, ?, ?, ?, ?);');
   try {
-    stmt.execute([id, email, passwordHash, phone, googleId, createdAt, username]);
+    stmt.execute([id, email, password_hash, phone, google_id, created_at, username]);
   } finally {
     stmt.dispose();
   }
@@ -815,7 +815,7 @@ void main(List<String> args) async {
       final newId = uuid.v4();
       final createdAt = DateTime.now().toIso8601String();
       final defaultUsername = username ?? email.split('@')[0];
-      _dbInsertUser(id: newId, email: email, passwordHash: hash, phone: phone, googleId: null, createdAt: createdAt, username: defaultUsername);
+      _dbInsertUser(id: newId, email: email, password_hash: hash, phone: phone, google_id: null, created_at: createdAt, username: defaultUsername);
       final tokens = _issueTokens(newId, email);
       return Response.ok(jsonEncode({'token': tokens['accessToken'], 'refreshToken': tokens['refreshToken'], 'user': {'id': newId, 'email': email, 'phone': phone, 'username': defaultUsername}}), headers: {'Content-Type': 'application/json'});
     } catch (e) {
@@ -844,9 +844,9 @@ void main(List<String> args) async {
         return Response(401, body: jsonEncode({'error': 'Invalid credentials'}), headers: {'Content-Type': 'application/json'});
       }
       print('✅ [LOGIN] User found: ${user['email']}');
-      print('🔐 [LOGIN] User data: id=${user['id']}, email=${user['email']}, hasHash=${user['passwordHash'] != null}');
+      print('🔐 [LOGIN] User data: id=${user['id']}, email=${user['email']}, hasHash=${user['password_hash'] != null}');
       
-      final hash = user['passwordHash'] as String?;
+      final hash = user['password_hash'] as String?;
       if (hash == null) {
         print('❌ [LOGIN] No password hash found for user');
         return Response(401, body: jsonEncode({'error': 'Invalid credentials'}), headers: {'Content-Type': 'application/json'});
@@ -1422,7 +1422,7 @@ void main(List<String> args) async {
       if (user == null) {
         final newId = uuid.v4();
         final createdAt = DateTime.now().toIso8601String();
-        _dbInsertUser(id: newId, email: null, passwordHash: null, phone: phone, googleId: null, createdAt: createdAt);
+        _dbInsertUser(id: newId, email: null, password_hash: null, phone: phone, google_id: null, created_at: createdAt);
         user = await _dbGetUserById(newId);
         print('👤 New user created: $newId');
       }
@@ -1492,7 +1492,7 @@ void main(List<String> args) async {
           return Response(400, body: jsonEncode({'error': 'Password required for login'}), headers: {'Content-Type': 'application/json'});
         }
         
-        final hash = user['passwordHash'] as String?;
+        final hash = user['password_hash'] as String?;
         if (hash == null) {
           return Response(401, body: jsonEncode({'error': 'Account has no password set'}), headers: {'Content-Type': 'application/json'});
         }
@@ -1518,10 +1518,10 @@ void main(List<String> args) async {
         _dbInsertUser(
           id: newId, 
           email: email, 
-          passwordHash: hash, 
+          password_hash: hash, 
           phone: null, 
-          googleId: null, 
-          createdAt: createdAt,
+          google_id: null, 
+          created_at: createdAt,
           username: defaultUsername
         );
         
@@ -1574,7 +1574,7 @@ void main(List<String> args) async {
       if (user == null) {
         final newId = uuid.v4();
         final createdAt = DateTime.now().toIso8601String();
-        _dbInsertUser(id: newId, email: email, passwordHash: null, phone: null, googleId: googleId, createdAt: createdAt);
+        _dbInsertUser(id: newId, email: email, password_hash: null, phone: null, google_id: googleId, created_at: createdAt);
         user = await _dbGetUserById(newId);
       } else {
         // ensure google id is stored/updated
@@ -1656,7 +1656,7 @@ void main(List<String> args) async {
       return Response.ok(jsonEncode({
         'email': user['email'],
         'username': user['username'] ?? '',
-        'createdAt': user['createdAt'],
+        'createdAt': user['created_at'],
       }), headers: {'Content-Type': 'application/json'});
     } catch (e) {
       print('[PROFILE] Error: $e');
