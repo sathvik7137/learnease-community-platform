@@ -2248,6 +2248,16 @@ void main(List<String> args) async {
     
     final out = <Map<String, dynamic>>[];
     final processedEmails = <String>{}; // Track processed users to avoid duplicates
+    // Extract current admin email from token so we can exclude admin from both MongoDB and SQLite results
+    final token = auth.substring(7);
+    String? currentAdminEmail;
+    try {
+      final decoded = JWT.verify(token, SecretKey(jwtSecret));
+      currentAdminEmail = decoded.payload['email'] as String?;
+      print('[ADMIN] 👮 Current admin: $currentAdminEmail');
+    } catch (e) {
+      print('[ADMIN] ⚠️ Could not decode token: $e');
+    }
     
     // Query MongoDB first (production) - Get ALL users except current admin
     if (mongoUsersCollection != null) {
@@ -2306,24 +2316,35 @@ void main(List<String> args) async {
       }
     }
     
-    // Fallback to SQLite if MongoDB query returned no results or failed
-    if (out.isEmpty) {
-      print('[ADMIN] 🔄 Falling back to SQLite database');
+    // Merge SQLite rows into the results to ensure no local users are missed
+    // (MongoDB may be partial or missing migrated rows)
+    try {
+      print('[ADMIN] 🔁 Merging local SQLite users (if any)');
       final rows = db.select('SELECT id, email, username, created_at FROM users');
-      out.addAll(rows.map((r) {
-        final email = r['email'] as String;
-        if (!processedEmails.contains(email)) {
-          processedEmails.add(email);
-          return {
-            'id': r['id'],
-            'email': email,
-            'username': r['username'],
-            'createdAt': r['created_at'],
-            'contributionCount': 0,
-          };
-        }
-        return null;
-      }).whereType<Map<String, dynamic>>());
+      for (final r in rows) {
+        final email = r['email'] as String?;
+        if (email == null) continue;
+        // Skip current admin and duplicates already processed from MongoDB
+        if (processedEmails.contains(email)) continue;
+        if (currentAdminEmail != null && email.toLowerCase() == currentAdminEmail.toLowerCase()) continue;
+
+        final id = r['id'] as String?;
+        final username = r['username'] as String? ?? email.split('@')[0];
+        final createdAt = r['created_at'] as String?;
+        final count = await contribCollection?.count({'authorEmail': email}) ?? 0;
+
+        out.add({
+          'id': id ?? uuid.v4(),
+          'email': email,
+          'username': username,
+          'createdAt': createdAt,
+          'contributionCount': count,
+        });
+        processedEmails.add(email);
+        print('[ADMIN] 🗂️ Merged SQLite user $email (ID: ${id ?? 'generated'})');
+      }
+    } catch (e) {
+      print('[ADMIN] ⚠️ SQLite merge error: $e');
     }
     
     print('[ADMIN] 📊 Returning ${out.length} users to admin panel');
